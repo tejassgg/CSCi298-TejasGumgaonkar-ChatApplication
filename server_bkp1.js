@@ -1,9 +1,9 @@
+// server.js
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
 const mongoose = require('mongoose');
-const fs = require('fs');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -89,22 +89,11 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
       fileSize: req.file.size,
       fileType: req.file.mimetype 
     });
-
-    // Asynchronously write details to a log file
-    const logData = `File uploaded: ${req.file.originalname} at ${new Date().toLocaleString()}\n`;
-    fs.writeFile('upload_log.txt', logData, { flag: 'a' }, (err) => {
-      if (err) {
-        console.error('Error writing to log file:', err);
-      } else {
-        console.log('Log file updated');
-      }
-    });
   } catch (error) {
     console.error('File upload error:', error);
     res.status(500).json({ message: 'Error uploading file' });
   }
 });
-
 
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
@@ -114,60 +103,55 @@ io.on('connection', async (socket) => {
   // Handle user joining
   socket.on('join', async (username) => {
     try {
-      // Use process.nextTick to defer database operations
-      process.nextTick(async () => {
-        // Find or create user - simplified with no password
-        let user = await User.findOne({ username });
-        
-        if (!user) {
-          user = new User({
-            username,
-            status: 'online'
-          });
-          await user.save();
-        } else {
-          // Update user status
-          user.status = 'online';
-          user.lastActive = Date.now();
-          await user.save();
-        }
-        
-        currentUser = user;
-        
-        // Find default room
-        const defaultRoom = await ChatRoom.findOne({ name: 'General' });
-        currentRoom = defaultRoom._id;
-        
-        // Join socket room
-        socket.join(defaultRoom._id.toString());
-        
-        // Store user in active users map
-        activeUsers.set(socket.id, {
-          userId: user._id,
-          username: user.username,
-          roomId: defaultRoom._id
+      // Find or create user - simplified with no password
+      let user = await User.findOne({ username });
+      
+      if (!user) {
+        user = new User({
+          username,
+          status: 'online'
         });
-        
-        // Notify all clients about the new user
-        io.emit('userJoined', user.username);
-        
-        // Send current user list to all clients
-        const userList = Array.from(activeUsers.values()).map(u => u.username);
-        io.emit('userList', userList);
-        
-        // Read and send last 50 messages to the new user
-        fs.readFile('messages_log.txt', 'utf-8', (err, data) => {
-          if (err) {
-            console.error('Error reading messages log:', err);
-          } else {
-            const messages = JSON.parse(data);
-            const last50Messages = messages.slice(-50);
-            socket.emit('previousMessages', last50Messages);
-          }
-        });
-        
-        console.log(`${username} user connected`);
+        await user.save();
+      } else {
+        // Update user status
+        user.status = 'online';
+        user.lastActive = Date.now();
+        await user.save();
+      }
+      
+      currentUser = user;
+      
+      // Find default room
+      const defaultRoom = await ChatRoom.findOne({ name: 'General' });
+      currentRoom = defaultRoom._id;
+      
+      // Join socket room
+      socket.join(defaultRoom._id.toString());
+      
+      // Store user in active users map
+      activeUsers.set(socket.id, {
+        userId: user._id,
+        username: user.username,
+        roomId: defaultRoom._id
       });
+      
+      // Notify all clients about the new user
+      io.emit('userJoined', user.username);
+      
+      // Send current user list to all clients
+      const userList = Array.from(activeUsers.values()).map(u => u.username);
+      io.emit('userList', userList);
+      
+      // Send last 50 messages to the new user
+      const messages = await Message.find({ chatRoom: defaultRoom._id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate('sender', 'username')
+        .lean();
+        
+      socket.emit('previousMessages', messages.reverse());
+      
+      console.log(`${username} user connected`);
     } catch (error) {
       console.error('Error in join event:', error);
     }
@@ -198,19 +182,45 @@ io.on('connection', async (socket) => {
       
       // Broadcast message to room
       io.to(currentRoom.toString()).emit('message', messageData);
-
-      // Use setImmediate to defer logging to file
-      setImmediate(() => {
-        const logData = `${currentUser.username}: ${message} at ${new Date().toLocaleString()}\n`;
-        fs.writeFile('messages_log.txt', logData, { flag: 'a' }, (err) => {
-          if (err) {
-            console.error('Error writing to log file:', err);
-          }
-        });
-      });
-
     } catch (error) {
       console.error('Error in chatMessage event:', error);
+    }
+  });
+
+  // Handle media message
+  socket.on('mediaMessage', async (data) => {
+    try {
+      if (!currentUser || !currentRoom) return;
+      
+      const { mediaUrl, mediaType, fileName, fileSize } = data;
+      
+      // Create new media message in database
+      const newMessage = new Message({
+        chatRoom: currentRoom,
+        sender: currentUser._id,
+        messageType: mediaType,
+        mediaUrl,
+        fileName,
+        fileSize
+      });
+      
+      await newMessage.save();
+      
+      // Format message for client
+      const messageData = {
+        _id: newMessage._id,
+        username: currentUser.username,
+        mediaUrl,
+        mediaType,
+        fileName,
+        fileSize,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      // Broadcast message to room
+      io.to(currentRoom.toString()).emit('mediaMessage', messageData);
+    } catch (error) {
+      console.error('Error in mediaMessage event:', error);
     }
   });
 
@@ -252,9 +262,3 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-// Use setTimeout to perform a periodic task
-setTimeout(() => {
-  console.log('Performing a periodic task...');
-  // Your task logic here
-}, 60000); // 60 seconds
