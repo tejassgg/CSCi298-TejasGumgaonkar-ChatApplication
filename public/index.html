@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,7 +23,7 @@
             margin: 20px auto;
             background: white;
             border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             height: calc(100vh - 40px);
             display: flex;
             flex-direction: column;
@@ -33,6 +34,9 @@
             background: #1877f2;
             color: white;
             border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .chat-messages {
@@ -129,12 +133,76 @@
             color: #65676b;
             margin: 10px 0;
         }
+
+        .media-attachment {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 10px;
+            margin-top: 5px;
+        }
+
+        .media-container {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .file-attachment {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: #f0f2f5;
+            border-radius: 10px;
+            margin-top: 5px;
+        }
+
+        .file-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+
+        .file-name {
+            font-size: 14px;
+            color: #1877f2;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .file-size {
+            font-size: 12px;
+            color: #65676b;
+            margin-left: 10px;
+        }
+
+        .media-buttons {
+            display: flex;
+            margin-right: 10px;
+        }
+
+        .media-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            margin-right: 5px;
+            color: #1877f2;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .room-info {
+            font-size: 14px;
+        }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body>
     <div class="chat-container">
         <div class="chat-header">
             <h1>Chat Room</h1>
+            <div class="room-info">General</div>
         </div>
         <div class="user-list">
             <strong>Online Users:</strong> <span id="userList"></span>
@@ -145,6 +213,20 @@
         <div class="typing-indicator" id="typingIndicator"></div>
         <div class="chat-input">
             <div class="input-container">
+                <div class="media-buttons">
+                    <button class="media-btn" id="imageBtn" title="Upload Image">
+                        <i class="fas fa-image"></i>
+                    </button>
+                    <button class="media-btn" id="videoBtn" title="Upload Video">
+                        <i class="fas fa-video"></i>
+                    </button>
+                    <button class="media-btn" id="fileBtn" title="Upload File">
+                        <i class="fas fa-file"></i>
+                    </button>
+                </div>
+                <input type="file" id="imageInput" class="file-input" accept="image/*">
+                <input type="file" id="videoInput" class="file-input" accept="video/*">
+                <input type="file" id="fileInput" class="file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt">
                 <input type="text" id="messageInput" placeholder="Type a message...">
                 <button id="sendButton">Send</button>
             </div>
@@ -163,6 +245,13 @@
         const typingIndicator = document.getElementById('typingIndicator');
         const userList = document.getElementById('userList');
 
+        const imageBtn = document.getElementById('imageBtn');
+        const videoBtn = document.getElementById('videoBtn');
+        const fileBtn = document.getElementById('fileBtn');
+        const imageInput = document.getElementById('imageInput');
+        const videoInput = document.getElementById('videoInput');
+        const fileInput = document.getElementById('fileInput');
+
         // Get username from prompt
         let username = prompt('Please enter your username:');
         while (!username || username.trim() === '') {
@@ -171,6 +260,13 @@
 
         // Join chat
         socket.emit('join', username);
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
 
         // Send message function
         function sendMessage() {
@@ -181,7 +277,7 @@
             }
         }
 
-        // Event listeners
+        // Event listeners for text messages
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -189,6 +285,158 @@
             }
             socket.emit('typing');
         });
+
+        // Media upload event listeners
+        imageBtn.addEventListener('click', () => imageInput.click());
+        videoBtn.addEventListener('click', () => videoInput.click());
+        fileBtn.addEventListener('click', () => fileInput.click());
+
+        // Handle image upload
+        imageInput.addEventListener('change', handleImageUpload);
+        videoInput.addEventListener('change', handleVideoUpload);
+        fileInput.addEventListener('change', handleFileUpload);
+
+        // Upload an image file
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            uploadMedia(file, 'image');
+            e.target.value = ''; // Reset input
+        }
+
+        // Upload a video file
+        function handleVideoUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            uploadMedia(file, 'video');
+            e.target.value = ''; // Reset input
+        }
+
+        // Upload a general file
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            uploadMedia(file, 'file');
+            e.target.value = ''; // Reset input
+        }
+
+        // Generic media upload function
+        function uploadMedia(file, mediaType) {
+            const formData = new FormData();
+            formData.append('media', file);
+            formData.append('chatRoomId', 'defaultRoomId'); // You'll need to get the actual room ID
+            formData.append('senderId', 'currentUserId'); // You'll need to get the actual user ID
+            formData.append('messageType', mediaType);
+
+            // Show upload indicator in chat
+            const tempMessageId = 'temp-' + Date.now();
+            addTempMediaMessage(tempMessageId, file.name, mediaType);
+
+            // Upload to server
+            fetch('/api/messages/media', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => {
+                    if (!response.ok) throw new Error('Upload failed');
+                    return response.json();
+                })
+                .then(data => {
+                    // Replace temp message with actual one
+                    replaceTempMessage(tempMessageId, data);
+
+                    // Emit socket event for real-time updates to other users
+                    socket.emit('mediaMessage', {
+                        mediaUrl: data.mediaUrl,
+                        mediaType: data.messageType,
+                        fileName: data.fileName,
+                        fileSize: data.fileSize
+                    });
+                })
+                .catch(error => {
+                    console.error('Error uploading media:', error);
+                    // Remove temp message and show error
+                    document.getElementById(tempMessageId)?.remove();
+                    addSystemMessage('Failed to upload media. Please try again.');
+                });
+        }
+
+        // Add temporary media message while uploading
+        function addTempMediaMessage(id, fileName, mediaType) {
+            const messageDiv = document.createElement('div');
+            messageDiv.id = id;
+            messageDiv.className = 'message sent';
+
+            let content = '';
+            if (mediaType === 'image') {
+                content = '<div class="message-content">Uploading image...</div>';
+            } else if (mediaType === 'video') {
+                content = '<div class="message-content">Uploading video...</div>';
+            } else {
+                content = `<div class="message-content">Uploading file: ${fileName}...</div>`;
+            }
+
+            messageDiv.innerHTML = content + '<div class="timestamp">Uploading...</div>';
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Replace temporary message with the real one
+        function replaceTempMessage(tempId, messageData) {
+            const tempMessage = document.getElementById(tempId);
+            if (!tempMessage) return;
+
+            tempMessage.id = messageData._id;
+
+            let content = '';
+            if (messageData.messageType === 'image') {
+                content = `
+                    <div class="message-content">
+                        <strong>${username}</strong><br>
+                        <div class="media-container">
+                            <img src="${messageData.mediaUrl}" alt="Image" class="media-attachment">
+                        </div>
+                    </div>
+                `;
+            } else if (messageData.messageType === 'video') {
+                content = `
+                    <div class="message-content">
+                        <strong>${username}</strong><br>
+                        <div class="media-container">
+                            <video controls class="media-attachment">
+                                <source src="${messageData.mediaUrl}" type="video/*">
+                                Your browser does not support video playback.
+                            </video>
+                        </div>
+                    </div>
+                `;
+            } else {
+                content = `
+                    <div class="message-content">
+                        <strong>${username}</strong><br>
+                        <div class="file-attachment">
+                            <div class="file-icon"><i class="fas fa-file"></i></div>
+                            <a href="${messageData.mediaUrl}" target="_blank" class="file-name">${messageData.fileName}</a>
+                            <span class="file-size">${formatFileSize(messageData.fileSize)}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            tempMessage.innerHTML = content + `<div class="timestamp">${new Date().toLocaleTimeString()}</div>`;
+        }
+
+        // Add a system message
+        function addSystemMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'system-message';
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
 
         // Socket event handlers
         socket.on('message', (data) => {
@@ -202,6 +450,115 @@
                 <div class="timestamp">${data.timestamp}</div>
             `;
             chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+
+        socket.on('mediaMessage', (data) => {
+            if (data.username === username) return; // Skip if it's our own message
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message received';
+            messageDiv.id = data._id;
+
+            let content = '';
+            if (data.mediaType === 'image') {
+                content = `
+                    <div class="message-content">
+                        <strong>${data.username}</strong><br>
+                        <div class="media-container">
+                            <img src="${data.mediaUrl}" alt="Image" class="media-attachment">
+                        </div>
+                    </div>
+                `;
+            } else if (data.mediaType === 'video') {
+                content = `
+                    <div class="message-content">
+                        <strong>${data.username}</strong><br>
+                        <div class="media-container">
+                            <video controls class="media-attachment">
+                                <source src="${data.mediaUrl}" type="video/*">
+                                Your browser does not support video playback.
+                            </video>
+                        </div>
+                    </div>
+                `;
+            } else {
+                content = `
+                    <div class="message-content">
+                        <strong>${data.username}</strong><br>
+                        <div class="file-attachment">
+                            <div class="file-icon"><i class="fas fa-file"></i></div>
+                            <a href="${data.mediaUrl}" target="_blank" class="file-name">${data.fileName}</a>
+                            <span class="file-size">${formatFileSize(data.fileSize)}</span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            messageDiv.innerHTML = content + `<div class="timestamp">${data.timestamp}</div>`;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+
+        // Load previous messages
+        socket.on('previousMessages', (messages) => {
+            // Clear any existing messages first
+            chatMessages.innerHTML = '';
+
+            messages.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                const isSent = msg.sender.username === username;
+                messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+                messageDiv.id = msg._id;
+
+                if (msg.messageType === 'text') {
+                    messageDiv.innerHTML = `
+                        <div class="message-content">
+                            <strong>${msg.sender.username}</strong><br>
+                            ${msg.text}
+                        </div>
+                        <div class="timestamp">${new Date(msg.createdAt).toLocaleTimeString()}</div>
+                    `;
+                } else if (msg.messageType === 'image') {
+                    messageDiv.innerHTML = `
+                        <div class="message-content">
+                            <strong>${msg.sender.username}</strong><br>
+                            <div class="media-container">
+                                <img src="${msg.mediaUrl}" alt="Image" class="media-attachment">
+                            </div>
+                        </div>
+                        <div class="timestamp">${new Date(msg.createdAt).toLocaleTimeString()}</div>
+                    `;
+                } else if (msg.messageType === 'video') {
+                    messageDiv.innerHTML = `
+                        <div class="message-content">
+                            <strong>${msg.sender.username}</strong><br>
+                            <div class="media-container">
+                                <video controls class="media-attachment">
+                                    <source src="${msg.mediaUrl}" type="video/*">
+                                    Your browser does not support video playback.
+                                </video>
+                            </div>
+                        </div>
+                        <div class="timestamp">${new Date(msg.createdAt).toLocaleTimeString()}</div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="message-content">
+                            <strong>${msg.sender.username}</strong><br>
+                            <div class="file-attachment">
+                                <div class="file-icon"><i class="fas fa-file"></i></div>
+                                <a href="${msg.mediaUrl}" target="_blank" class="file-name">${msg.fileName}</a>
+                                <span class="file-size">${formatFileSize(msg.fileSize)}</span>
+                            </div>
+                        </div>
+                        <div class="timestamp">${new Date(msg.createdAt).toLocaleTimeString()}</div>
+                    `;
+                }
+
+                chatMessages.appendChild(messageDiv);
+            });
+
             chatMessages.scrollTop = chatMessages.scrollHeight;
         });
 
@@ -233,4 +590,5 @@
         });
     </script>
 </body>
+
 </html>
