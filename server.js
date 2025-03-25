@@ -2,8 +2,8 @@ const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const mongoose = require('mongoose');
 const fs = require('fs');
+const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
@@ -18,7 +18,7 @@ const upload = require('./utils/fileUpload');
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chat-application';
+    const mongoURI = process.env.MONGODB_URI;
     await mongoose.connect(mongoURI);
     console.log('MongoDB connected successfully');
   } catch (error) {
@@ -59,7 +59,7 @@ const createDefaultRoom = async () => {
       // Create general room
       const newRoom = new ChatRoom({
         name: 'General',
-        description: 'Public chat room for everyone',
+        description: 'Public Chat Room For Everyone',
         isPrivate: false,
         createdBy: systemUser._id
       });
@@ -104,7 +104,6 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
     res.status(500).json({ message: 'Error uploading file' });
   }
 });
-
 
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
@@ -155,17 +154,6 @@ io.on('connection', async (socket) => {
         const userList = Array.from(activeUsers.values()).map(u => u.username);
         io.emit('userList', userList);
         
-        // Read and send last 50 messages to the new user
-        fs.readFile('messages_log.txt', 'utf-8', (err, data) => {
-          if (err) {
-            console.error('Error reading messages log:', err);
-          } else {
-            const messages = JSON.parse(data);
-            const last50Messages = messages.slice(-50);
-            socket.emit('previousMessages', last50Messages);
-          }
-        });
-        
         console.log(`${username} user connected`);
       });
     } catch (error) {
@@ -198,19 +186,45 @@ io.on('connection', async (socket) => {
       
       // Broadcast message to room
       io.to(currentRoom.toString()).emit('message', messageData);
-
-      // Use setImmediate to defer logging to file
-      setImmediate(() => {
-        const logData = `${currentUser.username}: ${message} at ${new Date().toLocaleString()}\n`;
-        fs.writeFile('messages_log.txt', logData, { flag: 'a' }, (err) => {
-          if (err) {
-            console.error('Error writing to log file:', err);
-          }
-        });
-      });
-
     } catch (error) {
       console.error('Error in chatMessage event:', error);
+    }
+  });
+
+  // Handle media message
+  socket.on('mediaMessage', async (data) => {
+    try {
+      if (!currentUser || !currentRoom) return;
+      
+      const { mediaUrl, mediaType, fileName, fileSize } = data;
+      
+      // Create new media message in database
+      const newMessage = new Message({
+        chatRoom: currentRoom,
+        sender: currentUser._id,
+        messageType: mediaType,
+        mediaUrl,
+        fileName,
+        fileSize
+      });
+      
+      await newMessage.save();
+      
+      // Format message for client
+      const messageData = {
+        _id: newMessage._id,
+        username: currentUser.username,
+        mediaUrl,
+        mediaType,
+        fileName,
+        fileSize,
+        timestamp: new Date().toLocaleTimeString()
+      };
+      
+      // Broadcast message to room
+      io.to(currentRoom.toString()).emit('mediaMessage', messageData);
+    } catch (error) {
+      console.error('Error in mediaMessage event:', error);
     }
   });
 
@@ -219,6 +233,38 @@ io.on('connection', async (socket) => {
     if (!currentUser) return;
     
     socket.broadcast.to(currentRoom.toString()).emit('userTyping', currentUser.username);
+  });
+
+  // Handle user logout
+  socket.on('logout', async (username) => {
+    try {
+      // Find the user in the database
+      const user = await User.findOne({ username });
+      if (!user) return;
+
+      // Delete all messages sent by the user
+      await Message.deleteMany({ sender: user._id });
+
+      // Delete the user from the database
+      await User.deleteOne({ _id: user._id });
+
+      // Remove from active users
+      activeUsers.delete(socket.id);
+
+      // Notify all clients
+      io.emit('userLeft', username);
+
+      // Update user list
+      const userList = Array.from(activeUsers.values()).map(u => u.username);
+      io.emit('userList', userList);
+
+      // Notify the user about successful logout
+      socket.emit('logoutSuccess');
+      
+      console.log(`${username} user logged out and deleted`);
+    } catch (error) {
+      console.error('Error in logout event:', error);
+    }
   });
 
   // Handle user disconnect
@@ -252,9 +298,3 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
-
-// Use setTimeout to perform a periodic task
-setTimeout(() => {
-  console.log('Performing a periodic task...');
-  // Your task logic here
-}, 60000); // 60 seconds

@@ -139,3 +139,18 @@ body {
     color: #65676b;
     margin: 10px 0;
 }
+
+#logoutButton {
+    padding: 10px 20px;
+    background: #d9534f;
+    color: white;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    margin-left: 10px;
+    display: none; /* Initially hide the logout button */
+}
+
+#logoutButton:hover {
+    background: #c9302c;
+}
