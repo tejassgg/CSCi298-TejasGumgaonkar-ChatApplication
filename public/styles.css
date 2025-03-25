@@ -26,6 +26,9 @@ body {
     background: #1877f2;
     color: white;
     border-radius: 10px 10px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .chat-messages {
