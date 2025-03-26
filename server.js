@@ -15,13 +15,14 @@ const Message = require('./models/Message');
 // Import file upload utility
 const upload = require('./utils/fileUpload');
 
-const SERVER_URL = 'http://localhost:3000';
-
 // Connect to MongoDB
 const connectDB = async () => {
   try {
     const mongoURI = process.env.MONGODB_URI;
-    await mongoose.connect(mongoURI);
+    await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 30000, // Increase the timeout to 30 seconds
+      socketTimeoutMS: 45000, // Increase the socket timeout to 45 seconds
+    });
     console.log('MongoDB connected successfully');
   } catch (error) {
     console.error('MongoDB connection error:', error);
@@ -131,6 +132,8 @@ app.post('/api/create-users', async (req, res) => {
     });
     console.log('All Users deleted');
 
+    const users = [];
+
     // Create users
     for (let i = 0; i < numUsers; i++) {
       const username = `testuser${i}`;
@@ -149,65 +152,12 @@ app.post('/api/create-users', async (req, res) => {
       }
 
       users.push(user);
-
-      // Join user to the General chat room
-      const socket = io(SERVER_URL, {
-        transports: ['websocket'],
-        reconnection: false
-      });
-
-      socket.emit('join', username);
-
-      activeUsers.set(socket.id, {
-        userId: user._id,
-        username: user.username,
-        roomId: generalRoom._id
-      });
-
-      socket.join(generalRoom._id.toString());
-      io.emit('userJoined', user.username);
     }
 
-    res.json({ success: true, message: `${numUsers} users created and connected to the General chat room` });
+    res.json({ success: true, message: `${numUsers} users created`, users, generalRoom });
   } catch (error) {
     console.error('Error in create-users endpoint:', error);
     res.status(500).json({ message: 'Error in create-users endpoint' });
-  }
-});
-
-// Updated API endpoint to send random message from a random user
-app.post('/api/send-random-message', async (req, res) => {
-  try {
-
-    if (!users.length || !generalRoom) {
-      return res.status(400).json({ message: 'No users or chat room found' });
-    }
-
-    const randomUser = users[Math.floor(Math.random() * users.length)];
-
-    const newMessage = new Message({
-      chatRoom: generalRoom._id,
-      sender: randomUser._id,
-      messageType: 'text',
-      text: `Random message from ${randomUser.username}`
-    });
-
-    await newMessage.save();
-
-    // Emit the message to the General chat room
-    const messageData = {
-      _id: newMessage._id,
-      username: randomUser.username,
-      text: newMessage.text,
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    io.to(generalRoom._id.toString()).emit('message', messageData);
-
-    res.json({ success: true, message: 'Random message sent' });
-  } catch (error) {
-    console.error('Error in send-random-message endpoint:', error);
-    res.status(500).json({ message: 'Error in send-random-message endpoint' });
   }
 });
 
