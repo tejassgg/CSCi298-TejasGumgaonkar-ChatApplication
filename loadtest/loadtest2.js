@@ -5,6 +5,8 @@ const { PerformanceObserver, performance } = require('perf_hooks');
 const { io } = require('socket.io-client');
 require('dotenv').config();
 
+// const { sendRandomMessage } = require('../server1.js');
+
 const Message = require('../models/Message');
 
 const messages = [
@@ -24,7 +26,11 @@ function getRandomMessage() {
     const randomIndex = Math.floor(Math.random() * messages.length);
     return messages[randomIndex];
 }
+
 const SERVER_URL = 'http://localhost:3000';
+
+const socket = io(SERVER_URL);
+
 async function createUsers(numUsers) {
     try {
         const response = await fetch(`${SERVER_URL}/api/create-users`, {
@@ -68,16 +74,16 @@ async function createUsers(numUsers) {
     }
 }
 
-async function sendRandomMessage(users, generalRoom) {
+async function sendRandomMessage(users, currentRoomId) {
     try {
-        if (!users.length || !generalRoom) {
+        if (!users.length || !currentRoomId) {
             return res.status(400).json({ message: 'No users or chat room found' });
         }
 
         const randomUser = users[Math.floor(Math.random() * users.length)];
 
         const newMessage = new Message({
-            chatRoom: generalRoom._id,
+            chatRoom: currentRoomId,
             sender: randomUser._id,
             messageType: 'text',
             text: getRandomMessage()
@@ -89,11 +95,12 @@ async function sendRandomMessage(users, generalRoom) {
         const messageData = {
             _id: newMessage._id,
             username: randomUser.username,
-            text: newMessage.text,
+            text: getRandomMessage(),
             timestamp: new Date().toLocaleTimeString()
         };
-
-        io.to(generalRoom._id.toString()).emit('message', messageData);
+        
+        // Broadcast message to room
+        io.to(currentRoomId.toString()).emit('message', messageData);
 
     } catch (error) {
         console.error('Error in sendRandomMessage endpoint:', error);
@@ -102,32 +109,82 @@ async function sendRandomMessage(users, generalRoom) {
 
 async function main() {
     try {
-        const numUsers = 100; // Adjust the number of users as needed
+        const numUsers = 20; // Adjust the number of users as needed
         const { users, generalRoom } = await createUsers(numUsers);
         const resultsDir = path.join(__dirname, '../perf_results');
 
         // Measure CPU execution time for specific durations
-        const duration = 10000; // Total duration in milliseconds (e.g., 10 seconds)
+        const duration = 5000; // Total duration in milliseconds (e.g., 10 seconds)
         const intervals = [0.05, 0.10, 0.25, 0.50, 0.75, 1.00];
         const times = [];
-        var counter =0;
+        let messagesSent = 0;
+        let cpuUsageAt25 = 0;
+        let cpuUsageAt50 = 0;
+        let cpuUsageAt75 = 0;
+        let cpuUsageAt100 = 0;
+        const TEST_DURATION = duration / 1000; // In seconds
+        const startTime = performance.now();
 
-        for (const interval of intervals) {
-            const intervalTime = interval * duration;
-            const startTime = performance.now();
+        const currentRoomId = generalRoom._id;
+        console.log('Broadcasting message to room: ', currentRoomId);
 
-            const endTime = startTime + intervalTime;
-            while (performance.now() < endTime) {
-                await sendRandomMessage(users, generalRoom);
-                counter++;
-            }
-
-            const cpuTime = performance.now() - startTime;
-            times.push({ percentage: interval * 100, cpuTime });
+        for (let i = 0; i < 10; i++) {
+            sendRandomMessage(users, currentRoomId);
+            messagesSent++;
         }
-        console.log(counter);
-        const cpuTimesFile = path.join(resultsDir, 'cpu_times.json');
-        fs.writeFileSync(cpuTimesFile, JSON.stringify(times, null, 2));
+
+        // process.exit(-1);
+
+        // for (const interval of intervals) {
+        //     const intervalTime = interval * duration;
+        //     const intervalStartTime = performance.now();
+
+        //     const endTime = intervalStartTime + intervalTime;
+        //     while (performance.now() < endTime) {
+        //         sendRandomMessage(users, currentRoomId);
+        //         messagesSent++;
+        //     }
+
+        //     const cpuTime = performance.now() - intervalStartTime;
+        //     times.push({ percentage: interval * 100, cpuTime });
+
+        //     if (interval === 0.25) cpuUsageAt25 = cpuTime;
+        //     if (interval === 0.50) cpuUsageAt50 = cpuTime;
+        //     if (interval === 0.75) cpuUsageAt75 = cpuTime;
+        //     if (interval === 1.00) cpuUsageAt100 = cpuTime;
+        // }
+
+        // const elapsed = (performance.now() - startTime) / 1000; // In seconds
+
+        // console.log(`Test completed! Sent ${messagesSent} messages in ${elapsed} seconds`);
+        // console.log(`Average messages per second: ${(messagesSent / TEST_DURATION).toFixed(2)}`);
+        // console.log(`Number of Clients Connected: ${Array.from(users).length}`);
+        // console.log(`CPU Usage at 25%: ${cpuUsageAt25}`);
+        // console.log(`CPU Usage at 50%: ${cpuUsageAt50}`);
+        // console.log(`CPU Usage at 75%: ${cpuUsageAt75}`);
+        // console.log(`CPU Usage at 100%: ${cpuUsageAt100}`);
+
+        // // Store CPU times inside cpu_times.json
+        // if (!fs.existsSync(resultsDir)) {
+        //     fs.mkdirSync(resultsDir);
+        // }
+
+        // const cpuTimesFile = path.join(resultsDir, 'cpu_times.json');
+        // const testDetails = {
+        //     messagesSent,
+        //     elapsed,
+        //     averageMessagesPerSecond: (messagesSent / TEST_DURATION).toFixed(2),
+        //     clientsConnected: Array.from(users).length,
+        //     cpuUsageAt25,
+        //     cpuUsageAt50,
+        //     cpuUsageAt75,
+        //     cpuUsageAt100
+        // };
+        // const dataToStore = {
+        //     testDetails,
+        //     times
+        // };
+        // fs.writeFileSync(cpuTimesFile, JSON.stringify(dataToStore, null, 2));
     }
     catch (error) {
         console.error('Error in main:', error);

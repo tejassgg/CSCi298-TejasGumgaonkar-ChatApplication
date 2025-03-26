@@ -60,7 +60,7 @@ const createDefaultRoom = async () => {
         });
         await systemUser.save();
       }
-      
+
       // Create general room
       generalRoom = new ChatRoom({
         name: 'General',
@@ -84,15 +84,15 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
-    
+
     // Return the file path
     const filePath = `/uploads/${req.file.filename}`;
-    res.json({ 
-      success: true, 
-      filePath, 
+    res.json({
+      success: true,
+      filePath,
       fileName: req.file.originalname,
       fileSize: req.file.size,
-      fileType: req.file.mimetype 
+      fileType: req.file.mimetype
     });
 
     // Asynchronously write details to a log file
@@ -132,8 +132,6 @@ app.post('/api/create-users', async (req, res) => {
     });
     console.log('All Users deleted');
 
-    const users = [];
-
     // Create users
     for (let i = 0; i < numUsers; i++) {
       const username = `testuser${i}`;
@@ -165,7 +163,7 @@ app.post('/api/create-users', async (req, res) => {
 io.on('connection', async (socket) => {
   let currentUser = null;
   let currentRoom = null;
-  
+
   // Handle user joining
   socket.on('join', async (username) => {
     try {
@@ -173,7 +171,7 @@ io.on('connection', async (socket) => {
       process.nextTick(async () => {
         // Find or create user - simplified with no password
         let user = await User.findOne({ username });
-        
+
         if (!user) {
           user = new User({
             username,
@@ -186,29 +184,30 @@ io.on('connection', async (socket) => {
           user.lastActive = Date.now();
           await user.save();
         }
-        
+
         currentUser = user;
-        
+
         // Find default room
         currentRoom = generalRoom._id;
-        
+        // console.log(currentRoom);
+
         // Join socket room
         socket.join(generalRoom._id.toString());
-        
+
         // Store user in active users map
         activeUsers.set(socket.id, {
           userId: user._id,
           username: user.username,
           roomId: generalRoom._id
         });
-        
+
         // Notify all clients about the new user
         io.emit('userJoined', user.username);
-        
+
         // Send current user list to all clients
         const userList = Array.from(activeUsers.values()).map(u => u.username);
         io.emit('userList', userList);
-        
+
         console.log(`${username} user connected`);
       });
     } catch (error) {
@@ -220,7 +219,7 @@ io.on('connection', async (socket) => {
   socket.on('chatMessage', async (message) => {
     try {
       if (!currentUser || !currentRoom) return;
-      
+
       // Create new message in database
       const newMessage = new Message({
         chatRoom: currentRoom,
@@ -228,9 +227,9 @@ io.on('connection', async (socket) => {
         messageType: 'text',
         text: message
       });
-      
+
       await newMessage.save();
-      
+
       // Format message for client
       const messageData = {
         _id: newMessage._id,
@@ -238,7 +237,7 @@ io.on('connection', async (socket) => {
         text: message,
         timestamp: new Date().toLocaleTimeString()
       };
-      
+
       // Broadcast message to room
       io.to(currentRoom.toString()).emit('message', messageData);
     } catch (error) {
@@ -250,9 +249,9 @@ io.on('connection', async (socket) => {
   socket.on('mediaMessage', async (data) => {
     try {
       if (!currentUser || !currentRoom) return;
-      
+
       const { mediaUrl, mediaType, fileName, fileSize } = data;
-      
+
       // Create new media message in database
       const newMessage = new Message({
         chatRoom: currentRoom,
@@ -262,9 +261,9 @@ io.on('connection', async (socket) => {
         fileName,
         fileSize
       });
-      
+
       await newMessage.save();
-      
+
       // Format message for client
       const messageData = {
         _id: newMessage._id,
@@ -275,7 +274,7 @@ io.on('connection', async (socket) => {
         fileSize,
         timestamp: new Date().toLocaleTimeString()
       };
-      
+
       // Broadcast message to room
       io.to(currentRoom.toString()).emit('mediaMessage', messageData);
     } catch (error) {
@@ -286,7 +285,7 @@ io.on('connection', async (socket) => {
   // Handle typing indicator
   socket.on('typing', () => {
     if (!currentUser) return;
-    
+
     socket.broadcast.to(currentRoom.toString()).emit('userTyping', currentUser.username);
   });
 
@@ -315,7 +314,7 @@ io.on('connection', async (socket) => {
 
       // Notify the user about successful logout
       socket.emit('logoutSuccess');
-      
+
       console.log(`${username} user logged out and deleted`);
     } catch (error) {
       console.error('Error in logout event:', error);
@@ -330,17 +329,17 @@ io.on('connection', async (socket) => {
         currentUser.status = 'offline';
         currentUser.lastActive = Date.now();
         await currentUser.save();
-        
+
         // Remove from active users
         activeUsers.delete(socket.id);
-        
+
         // Notify all clients
         io.emit('userLeft', currentUser.username);
-        
+
         // Update user list
         const userList = Array.from(activeUsers.values()).map(u => u.username);
         io.emit('userList', userList);
-        
+
         console.log(`${currentUser.username} user disconnected`);
       }
     } catch (error) {

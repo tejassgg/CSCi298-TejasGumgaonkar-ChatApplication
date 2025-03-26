@@ -1,26 +1,38 @@
-[
-  {
-    "percentage": 5,
-    "cpuTime": 500.0024000000012
+{
+  "testDetails": {
+    "messagesSent": 134330,
+    "elapsed": 13.250630000000001,
+    "averageMessagesPerSecond": "26866.00",
+    "clientsConnected": 20,
+    "cpuUsageAt25": 1250.0677999999998,
+    "cpuUsageAt50": 2500.0287000000008,
+    "cpuUsageAt75": 3750.033700000001,
+    "cpuUsageAt100": 5000.092999999999
   },
-  {
-    "percentage": 10,
-    "cpuTime": 1000.0447999999997
-  },
-  {
-    "percentage": 25,
-    "cpuTime": 2500.0222000000012
-  },
-  {
-    "percentage": 50,
-    "cpuTime": 5000.007099999999
-  },
-  {
-    "percentage": 75,
-    "cpuTime": 7500.002700000001
-  },
-  {
-    "percentage": 100,
-    "cpuTime": 10000.032500000001
-  }
-]
+  "times": [
+    {
+      "percentage": 5,
+      "cpuTime": 250.0061999999998
+    },
+    {
+      "percentage": 10,
+      "cpuTime": 500.0951
+    },
+    {
+      "percentage": 25,
+      "cpuTime": 1250.0677999999998
+    },
+    {
+      "percentage": 50,
+      "cpuTime": 2500.0287000000008
+    },
+    {
+      "percentage": 75,
+      "cpuTime": 3750.033700000001
+    },
+    {
+      "percentage": 100,
+      "cpuTime": 5000.092999999999
+    }
+  ]
+}

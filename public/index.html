@@ -221,12 +221,12 @@
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
                 messageDiv.innerHTML = `
-        <div class="message-content">
-            <strong>${data.username}</strong><br>
-            ${data.text}
-        </div>
-        <div class="timestamp">${data.timestamp}</div>
-    `;
+                                        <div class="message-content">
+                                            <strong>${data.username}</strong><br>
+                                            ${data.text}
+                                        </div>
+                                        <div class="timestamp">${data.timestamp}</div>
+                `;
                 chatMessages.appendChild(messageDiv);
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             });
