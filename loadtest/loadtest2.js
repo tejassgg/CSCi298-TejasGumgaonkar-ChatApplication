@@ -1,74 +1,90 @@
-const express = require('express');
-const { MongoClient } = require('mongodb');
-const { Server } = require('socket.io');
-const http = require('http');
+const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
+require('dotenv').config();
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
+// Import models
+const User = require('./models/User');
+const ChatRoom = require('./models/ChatRoom');
 
-const MONGO_URL = 'mongodb+srv://tejassgg1:XjJ1Sn4ioNMnXOvZ@chat-application.cno8l.mongodb.net/?retryWrites=true&w=majority&appName=Chat-Application';
-const DB_NAME = 'chatapp';
+const SERVER_URL = 'http://localhost:3000';
 
-let db;
+async function createUsers(numUsers) {
+  try {
+    const response = await fetch(`${SERVER_URL}/api/create-users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ numUsers })
+    });
 
-app.use(express.json());
+    if (!response.ok) {
+      throw new Error(`Failed to create users: ${response.statusText}`);
+    }
 
-MongoClient.connect(MONGO_URL, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(client => {
-    db = client.db(DB_NAME);
-    console.log('Connected to MongoDB');
-  })
-  .catch(error => console.error(error));
-
-// Setup Socket.IO
-io.on('connection', (socket) => {
-  console.log('a user connected');
-  socket.on('disconnect', () => {
-    console.log('user disconnected');
-  });
-  socket.on('chatMessage', (msg) => {
-    console.log('message: ' + msg);
-  });
-});
-
-// API endpoint for load testing
-app.post('/loadtest', async (req, res) => {
-  const { numUsers, duration } = req.body;
-
-  // Delete all users where username is not 'tejassgg', 'system', or 'admin'
-  await db.collection('users').deleteMany({
-    username: { $nin: ['tejassgg', 'system', 'admin'] }
-  });
-  console.log('Deleted users where username is not "tejassgg", "system", or "admin"');
-
-  // Generate users
-  for (let i = 0; i < numUsers; i++) {
-    const username = `TestUser${i}`;
-    await db.collection('users').insertOne({ username });
+    const result = await response.json();
+    console.log(result.message);
+  } catch (error) {
+    console.error('Error in createUsers:', error);
   }
-  console.log(`Generated ${numUsers} users`);
+}
 
-  // Simulate message sending
-  const startTime = Date.now();
-  const interval = setInterval(() => {
-    const elapsed = (Date.now() - startTime) / 1000;
+async function getUsersAndGeneralRoom() {
+  try {
+    // Connect to MongoDB
+    const mongoURI = process.env.MONGODB_URI;
+    await mongoose.connect(mongoURI);
 
-    if (elapsed >= duration) {
-      clearInterval(interval);
-      console.log('Load test completed');
-      res.send('Load test completed');
-      return;
+    // Retrieve users and general room from the database
+    const users = await User.find();
+    const generalRoom = await ChatRoom.findOne({ name: 'General' });
+
+    await mongoose.disconnect();
+
+    return { users, generalRoom };
+  } catch (error) {
+    console.error('Error in getUsersAndGeneralRoom:', error);
+  }
+}
+
+async function sendRandomMessage(users, generalRoom) {
+  try {
+    const response = await fetch(`${SERVER_URL}/api/send-random-message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ users, generalRoom })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to send random message: ${response.statusText}`);
     }
 
-    for (let i = 0; i < numUsers; i++) {
-      const randomMessage = `Message from TestUser${i}`;
-      io.emit('chatMessage', randomMessage);
-    }
-  }, 1000);
-});
+    const result = await response.json();
+    console.log(result.message);
+  } catch (error) {
+    console.error('Error in sendRandomMessage:', error);
+  }
+}
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+async function main() {
+  await createUsers(50); // Adjust the number of users as needed
+
+  const { users, generalRoom } = await getUsersAndGeneralRoom();
+
+  // Export the users and generalRoom data
+  const data = { users, generalRoom };
+  const resultsDir = path.join(__dirname, 'perf_results');
+  if (!fs.existsSync(resultsDir)) {
+    fs.mkdirSync(resultsDir);
+  }
+  const resultsFile = path.join(resultsDir, 'users_and_generalRoom.json');
+  fs.writeFileSync(resultsFile, JSON.stringify(data, null, 2));
+
+  // Call the send-random-message API
+  await sendRandomMessage(users, generalRoom);
+}
+
+main();

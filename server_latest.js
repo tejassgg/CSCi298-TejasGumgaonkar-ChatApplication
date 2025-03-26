@@ -40,13 +40,11 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // In-memory storage for active users
 const activeUsers = new Map();
-let users = [];
-let generalRoom = null;
 
 // Create default chat room if it doesn't exist
 const createDefaultRoom = async () => {
   try {
-    generalRoom = await ChatRoom.findOne({ name: 'General' });
+    const generalRoom = await ChatRoom.findOne({ name: 'General' });
     if (!generalRoom) {
       // Create a system user if not exists
       let systemUser = await User.findOne({ username: 'System' });
@@ -59,13 +57,13 @@ const createDefaultRoom = async () => {
       }
       
       // Create general room
-      generalRoom = new ChatRoom({
+      const newRoom = new ChatRoom({
         name: 'General',
         description: 'Public Chat Room For Everyone',
         isPrivate: false,
         createdBy: systemUser._id
       });
-      await generalRoom.save();
+      await newRoom.save();
       console.log('Default chat room created');
     }
   } catch (error) {
@@ -107,100 +105,6 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
   }
 });
 
-// New API endpoint to create n users
-app.post('/api/create-users', async (req, res) => {
-  try {
-    const { numUsers } = req.body;
-
-    if (!numUsers) {
-      return res.status(400).json({ message: 'numUsers is required' });
-    }
-
-    if (!generalRoom) {
-      return res.status(500).json({ message: 'General chat room not found' });
-    }
-
-    // Create users
-    for (let i = 0; i < numUsers; i++) {
-      const username = `testuser${i}`;
-      let user = await User.findOne({ username });
-
-      if (!user) {
-        user = new User({
-          username,
-          status: 'online'
-        });
-        await user.save();
-      } else {
-        user.status = 'online';
-        user.lastActive = Date.now();
-        await user.save();
-      }
-
-      users.push(user);
-
-      // Join user to the General chat room
-      const socket = io(SERVER_URL, {
-        transports: ['websocket'],
-        reconnection: false
-      });
-
-      socket.emit('join', username);
-
-      activeUsers.set(socket.id, {
-        userId: user._id,
-        username: user.username,
-        roomId: generalRoom._id
-      });
-
-      socket.join(generalRoom._id.toString());
-      io.emit('userJoined', user.username);
-    }
-
-    res.json({ success: true, message: `${numUsers} users created and connected to the General chat room` });
-  } catch (error) {
-    console.error('Error in create-users endpoint:', error);
-    res.status(500).json({ message: 'Error in create-users endpoint' });
-  }
-});
-
-// Updated API endpoint to send random message from a random user
-app.post('/api/send-random-message', async (req, res) => {
-  try {
-    const { users, generalRoom } = req.body;
-
-    if (!users.length || !generalRoom) {
-      return res.status(400).json({ message: 'No users or chat room found' });
-    }
-
-    const randomUser = users[Math.floor(Math.random() * users.length)];
-
-    const newMessage = new Message({
-      chatRoom: generalRoom._id,
-      sender: randomUser._id,
-      messageType: 'text',
-      text: `Random message from ${randomUser.username}`
-    });
-
-    await newMessage.save();
-
-    // Emit the message to the General chat room
-    const messageData = {
-      _id: newMessage._id,
-      username: randomUser.username,
-      text: newMessage.text,
-      timestamp: new Date().toLocaleTimeString()
-    };
-    
-    io.to(generalRoom._id.toString()).emit('message', messageData);
-
-    res.json({ success: true, message: 'Random message sent' });
-  } catch (error) {
-    console.error('Error in send-random-message endpoint:', error);
-    res.status(500).json({ message: 'Error in send-random-message endpoint' });
-  }
-});
-
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
   let currentUser = null;
@@ -230,16 +134,17 @@ io.on('connection', async (socket) => {
         currentUser = user;
         
         // Find default room
-        currentRoom = generalRoom._id;
+        const defaultRoom = await ChatRoom.findOne({ name: 'General' });
+        currentRoom = defaultRoom._id;
         
         // Join socket room
-        socket.join(generalRoom._id.toString());
+        socket.join(defaultRoom._id.toString());
         
         // Store user in active users map
         activeUsers.set(socket.id, {
           userId: user._id,
           username: user.username,
-          roomId: generalRoom._id
+          roomId: defaultRoom._id
         });
         
         // Notify all clients about the new user

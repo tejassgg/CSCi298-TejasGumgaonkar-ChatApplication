@@ -1,6 +1,6 @@
-// loadtest.js
 const autocannon = require('autocannon');
 const { io } = require('socket.io-client');
+const os = require('os-utils'); // Library to get CPU usage
 
 // Configure test parameters
 const TEST_DURATION = 10; // seconds
@@ -24,6 +24,34 @@ const messages = [
 // Track connected clients
 const clients = new Set();
 let startTime = Date.now();
+
+// Variables to store CPU usage
+let cpuUsageAt20 = 0;
+let cpuUsageAt50 = 0;
+let cpuUsageAt75 = 0;
+let cpuUsageAt100 = 0;
+
+// Function to get CPU usage at specific intervals
+function getCpuUsageInterval(interval) {
+  os.cpuUsage((v) => {
+    switch (interval) {
+      case 20:
+        cpuUsageAt20 = v;
+        break;
+      case 50:
+        cpuUsageAt50 = v;
+        break;
+      case 75:
+        cpuUsageAt75 = v;
+        break;
+      case 100:
+        cpuUsageAt100 = v;
+        break;
+      default:
+        break;
+    }
+  });
+}
 
 // Create WebSocket clients and connect them
 function createClients() {
@@ -60,12 +88,26 @@ function startMessageBombardment() {
 
   const interval = setInterval(() => {
     const elapsed = (Date.now() - startTime) / 1000;
+    const percentageElapsed = (elapsed / TEST_DURATION) * 100;
+
+    if (percentageElapsed >= 20 && cpuUsageAt20 === 0) {
+      getCpuUsageInterval(20);
+    } else if (percentageElapsed >= 50 && cpuUsageAt50 === 0) {
+      getCpuUsageInterval(50);
+    } else if (percentageElapsed >= 75 && cpuUsageAt75 === 0) {
+      getCpuUsageInterval(75);
+    }
 
     if (elapsed >= TEST_DURATION) {
       clearInterval(interval);
+      getCpuUsageInterval(100);
       console.log(`Test completed! Sent ${messagesSent} messages in ${elapsed} seconds`);
       console.log(`Average messages per second: ${(messagesSent / TEST_DURATION).toFixed(2)}`);
       console.log(`Number of Clients Connected: ${Array.from(clients).length}`)
+      console.log(`CPU Usage at 20%: ${cpuUsageAt20}`);
+      console.log(`CPU Usage at 50%: ${cpuUsageAt50}`);
+      console.log(`CPU Usage at 75%: ${cpuUsageAt75}`);
+      console.log(`CPU Usage at 100%: ${cpuUsageAt100}`);
       disconnectClients();
       return;
     }
