@@ -157,3 +157,34 @@ body {
 #logoutButton:hover {
     background: #c9302c;
 }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .chat-container {
+        width: 100%;
+        height: 100vh;
+        margin: 0;
+        border-radius: 0;
+    }
+
+    .chat-header {
+        padding: 10px;
+        flex-direction: column;
+    }
+
+    .chat-messages {
+        padding: 10px;
+    }
+
+    .chat-input {
+        padding: 10px;
+    }
+
+    .input-container {
+        flex-direction: column;
+    }
+
+    #sendButton, #uploadButton {
+        width: 100%;
+    }
+}
