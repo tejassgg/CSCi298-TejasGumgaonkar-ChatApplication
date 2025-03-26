@@ -218,6 +218,7 @@
 
             // Socket event handlers
             socket.on('message', (data) => {
+                console.log(data.text);
                 const messageDiv = document.createElement('div');
                 messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
                 messageDiv.innerHTML = `

@@ -29,7 +29,7 @@ function getRandomMessage() {
 
 const SERVER_URL = 'http://localhost:3000';
 
-const socket = io(SERVER_URL);
+let clients = [];
 
 async function createUsers(numUsers) {
     try {
@@ -56,15 +56,15 @@ async function createUsers(numUsers) {
                 reconnection: false
             });
 
-            socket.emit('join', user.username);
+            socket.on('connect', () => {
+                socket.emit('join', user.username);
+                clients.push(socket);
+            });
 
-            // socket.on('connect', () => {
-            //     console.log(`${user.username} connected to chatroom`);
-            // });
+            socket.on('connect_error', (err) => {
+                assert.fail(`Client ${user.username} connection error: ${err.message}`);
+            });
 
-            // socket.on('disconnect', () => {
-            //     console.log(`${user.username} disconnected from chatroom`);
-            // });
         }
 
         return { users, generalRoom };
@@ -80,27 +80,39 @@ async function sendRandomMessage(users, currentRoomId) {
             return res.status(400).json({ message: 'No users or chat room found' });
         }
 
-        const randomUser = users[Math.floor(Math.random() * users.length)];
+        for (let i = 0; i < users.length; i++) {
+            // Call the new save-message endpoint
+            const response = await fetch(`${SERVER_URL}/api/save-message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    chatRoomId: currentRoomId,
+                    senderId: users[i]._id,
+                    messageType: 'text',
+                    text: getRandomMessage()
+                })
+            });
 
-        const newMessage = new Message({
-            chatRoom: currentRoomId,
-            sender: randomUser._id,
-            messageType: 'text',
-            text: getRandomMessage()
-        });
+            if (!response.ok) {
+                throw new Error(`Failed to save message: ${response.statusText}`);
+            }
 
-        await newMessage.save();
+            const { message } = await response.json();
 
-        // Emit the message to the General chat room
-        const messageData = {
-            _id: newMessage._id,
-            username: randomUser.username,
-            text: getRandomMessage(),
-            timestamp: new Date().toLocaleTimeString()
-        };
-        
-        // Broadcast message to room
-        io.to(currentRoomId.toString()).emit('message', messageData);
+            // console.log('Message sent:', message);
+
+            // Format message for client
+            const messageData = {
+                _id: message._id,
+                username: users[i].username,
+                text: message.text,
+                timestamp: new Date().toLocaleTimeString()
+            };
+
+            clients[i].emit('chatMessage', messageData.text);
+        }
 
     } catch (error) {
         console.error('Error in sendRandomMessage endpoint:', error);
@@ -109,7 +121,7 @@ async function sendRandomMessage(users, currentRoomId) {
 
 async function main() {
     try {
-        const numUsers = 20; // Adjust the number of users as needed
+        const numUsers = 10; // Adjust the number of users as needed
         const { users, generalRoom } = await createUsers(numUsers);
         const resultsDir = path.join(__dirname, '../perf_results');
 
@@ -128,63 +140,63 @@ async function main() {
         const currentRoomId = generalRoom._id;
         console.log('Broadcasting message to room: ', currentRoomId);
 
-        for (let i = 0; i < 10; i++) {
-            sendRandomMessage(users, currentRoomId);
-            messagesSent++;
-        }
+        // for (let i = 0; i < 2; i++) {
+        //     sendRandomMessage(users, currentRoomId);
+        //     messagesSent++;
+        // }
 
         // process.exit(-1);
 
-        // for (const interval of intervals) {
-        //     const intervalTime = interval * duration;
-        //     const intervalStartTime = performance.now();
+        for (const interval of intervals) {
+            const intervalTime = interval * duration;
+            const intervalStartTime = performance.now();
 
-        //     const endTime = intervalStartTime + intervalTime;
-        //     while (performance.now() < endTime) {
-        //         sendRandomMessage(users, currentRoomId);
-        //         messagesSent++;
-        //     }
+            const endTime = intervalStartTime + intervalTime;
+            while (performance.now() < endTime) {
+                sendRandomMessage(users, currentRoomId);
+                messagesSent++;
+            }
 
-        //     const cpuTime = performance.now() - intervalStartTime;
-        //     times.push({ percentage: interval * 100, cpuTime });
+            const cpuTime = performance.now() - intervalStartTime;
+            times.push({ percentage: interval * 100, cpuTime });
 
-        //     if (interval === 0.25) cpuUsageAt25 = cpuTime;
-        //     if (interval === 0.50) cpuUsageAt50 = cpuTime;
-        //     if (interval === 0.75) cpuUsageAt75 = cpuTime;
-        //     if (interval === 1.00) cpuUsageAt100 = cpuTime;
-        // }
+            if (interval === 0.25) cpuUsageAt25 = cpuTime;
+            if (interval === 0.50) cpuUsageAt50 = cpuTime;
+            if (interval === 0.75) cpuUsageAt75 = cpuTime;
+            if (interval === 1.00) cpuUsageAt100 = cpuTime;
+        }
 
-        // const elapsed = (performance.now() - startTime) / 1000; // In seconds
+        const elapsed = (performance.now() - startTime) / 1000; // In seconds
 
-        // console.log(`Test completed! Sent ${messagesSent} messages in ${elapsed} seconds`);
-        // console.log(`Average messages per second: ${(messagesSent / TEST_DURATION).toFixed(2)}`);
-        // console.log(`Number of Clients Connected: ${Array.from(users).length}`);
-        // console.log(`CPU Usage at 25%: ${cpuUsageAt25}`);
-        // console.log(`CPU Usage at 50%: ${cpuUsageAt50}`);
-        // console.log(`CPU Usage at 75%: ${cpuUsageAt75}`);
-        // console.log(`CPU Usage at 100%: ${cpuUsageAt100}`);
+        console.log(`Test completed! Sent ${messagesSent} messages in ${elapsed} seconds`);
+        console.log(`Average messages per second: ${(messagesSent / TEST_DURATION).toFixed(2)}`);
+        console.log(`Number of Clients Connected: ${Array.from(users).length}`);
+        console.log(`CPU Usage at 25%: ${cpuUsageAt25}`);
+        console.log(`CPU Usage at 50%: ${cpuUsageAt50}`);
+        console.log(`CPU Usage at 75%: ${cpuUsageAt75}`);
+        console.log(`CPU Usage at 100%: ${cpuUsageAt100}`);
 
-        // // Store CPU times inside cpu_times.json
-        // if (!fs.existsSync(resultsDir)) {
-        //     fs.mkdirSync(resultsDir);
-        // }
+        // Store CPU times inside cpu_times.json
+        if (!fs.existsSync(resultsDir)) {
+            fs.mkdirSync(resultsDir);
+        }
 
-        // const cpuTimesFile = path.join(resultsDir, 'cpu_times.json');
-        // const testDetails = {
-        //     messagesSent,
-        //     elapsed,
-        //     averageMessagesPerSecond: (messagesSent / TEST_DURATION).toFixed(2),
-        //     clientsConnected: Array.from(users).length,
-        //     cpuUsageAt25,
-        //     cpuUsageAt50,
-        //     cpuUsageAt75,
-        //     cpuUsageAt100
-        // };
-        // const dataToStore = {
-        //     testDetails,
-        //     times
-        // };
-        // fs.writeFileSync(cpuTimesFile, JSON.stringify(dataToStore, null, 2));
+        const cpuTimesFile = path.join(resultsDir, 'cpu_times.json');
+        const testDetails = {
+            messagesSent,
+            elapsed,
+            averageMessagesPerSecond: (messagesSent / TEST_DURATION).toFixed(2),
+            clientsConnected: Array.from(users).length,
+            cpuUsageAt25,
+            cpuUsageAt50,
+            cpuUsageAt75,
+            cpuUsageAt100
+        };
+        const dataToStore = {
+            testDetails,
+            times
+        };
+        fs.writeFileSync(cpuTimesFile, JSON.stringify(dataToStore, null, 2));
     }
     catch (error) {
         console.error('Error in main:', error);

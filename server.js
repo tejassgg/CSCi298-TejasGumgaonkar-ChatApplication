@@ -159,6 +159,35 @@ app.post('/api/create-users', async (req, res) => {
   }
 });
 
+// New API endpoint to save messages
+app.post('/api/save-message', async (req, res) => {
+  try {
+    // console.log(req.body);
+    const { chatRoomId, senderId, messageType, text, mediaUrl, fileName, fileSize } = req.body;
+
+    const newMessage = new Message({
+      chatRoom: chatRoomId,
+      sender: senderId,
+      messageType,
+      text,
+      mediaUrl,
+      fileName,
+      fileSize
+    });
+
+    await newMessage.save();
+
+    res.json({
+      success: true,
+      message: newMessage
+    });
+
+  } catch (error) {
+    console.error('Error in save-message endpoint:', error);
+    res.status(500).json({ message: 'Error saving message' });
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
   let currentUser = null;
