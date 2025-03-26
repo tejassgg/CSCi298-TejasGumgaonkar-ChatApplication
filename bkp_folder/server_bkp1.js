@@ -1,24 +1,24 @@
+// server.js
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const fs = require('fs');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
 // Import models
-const User = require('./models/User');
-const ChatRoom = require('./models/ChatRoom');
-const Message = require('./models/Message');
+const User = require('../models/User');
+const ChatRoom = require('../models/ChatRoom');
+const Message = require('../models/Message');
 
 // Import file upload utility
-const upload = require('./utils/fileUpload');
+const upload = require('../utils/fileUpload');
 
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI;
+    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chat-application';
     await mongoose.connect(mongoURI);
     console.log('MongoDB connected successfully');
   } catch (error) {
@@ -59,7 +59,7 @@ const createDefaultRoom = async () => {
       // Create general room
       const newRoom = new ChatRoom({
         name: 'General',
-        description: 'Public Chat Room For Everyone',
+        description: 'Public chat room for everyone',
         isPrivate: false,
         createdBy: systemUser._id
       });
@@ -89,16 +89,6 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
       fileSize: req.file.size,
       fileType: req.file.mimetype 
     });
-
-    // Asynchronously write details to a log file
-    const logData = `File uploaded: ${req.file.originalname} at ${new Date().toLocaleString()}\n`;
-    fs.writeFile('upload_log.txt', logData, { flag: 'a' }, (err) => {
-      if (err) {
-        console.error('Error writing to log file:', err);
-      } else {
-        console.log('Log file updated');
-      }
-    });
   } catch (error) {
     console.error('File upload error:', error);
     res.status(500).json({ message: 'Error uploading file' });
@@ -113,49 +103,55 @@ io.on('connection', async (socket) => {
   // Handle user joining
   socket.on('join', async (username) => {
     try {
-      // Use process.nextTick to defer database operations
-      process.nextTick(async () => {
-        // Find or create user - simplified with no password
-        let user = await User.findOne({ username });
-        
-        if (!user) {
-          user = new User({
-            username,
-            status: 'online'
-          });
-          await user.save();
-        } else {
-          // Update user status
-          user.status = 'online';
-          user.lastActive = Date.now();
-          await user.save();
-        }
-        
-        currentUser = user;
-        
-        // Find default room
-        const defaultRoom = await ChatRoom.findOne({ name: 'General' });
-        currentRoom = defaultRoom._id;
-        
-        // Join socket room
-        socket.join(defaultRoom._id.toString());
-        
-        // Store user in active users map
-        activeUsers.set(socket.id, {
-          userId: user._id,
-          username: user.username,
-          roomId: defaultRoom._id
+      // Find or create user - simplified with no password
+      let user = await User.findOne({ username });
+      
+      if (!user) {
+        user = new User({
+          username,
+          status: 'online'
         });
-        
-        // Notify all clients about the new user
-        io.emit('userJoined', user.username);
-        
-        // Send current user list to all clients
-        const userList = Array.from(activeUsers.values()).map(u => u.username);
-        io.emit('userList', userList);
-        
-        console.log(`${username} user connected`);
+        await user.save();
+      } else {
+        // Update user status
+        user.status = 'online';
+        user.lastActive = Date.now();
+        await user.save();
+      }
+      
+      currentUser = user;
+      
+      // Find default room
+      const defaultRoom = await ChatRoom.findOne({ name: 'General' });
+      currentRoom = defaultRoom._id;
+      
+      // Join socket room
+      socket.join(defaultRoom._id.toString());
+      
+      // Store user in active users map
+      activeUsers.set(socket.id, {
+        userId: user._id,
+        username: user.username,
+        roomId: defaultRoom._id
       });
+      
+      // Notify all clients about the new user
+      io.emit('userJoined', user.username);
+      
+      // Send current user list to all clients
+      const userList = Array.from(activeUsers.values()).map(u => u.username);
+      io.emit('userList', userList);
+      
+      // Send last 50 messages to the new user
+      const messages = await Message.find({ chatRoom: defaultRoom._id })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate('sender', 'username')
+        .lean();
+        
+      socket.emit('previousMessages', messages.reverse());
+      
+      console.log(`${username} user connected`);
     } catch (error) {
       console.error('Error in join event:', error);
     }
@@ -233,38 +229,6 @@ io.on('connection', async (socket) => {
     if (!currentUser) return;
     
     socket.broadcast.to(currentRoom.toString()).emit('userTyping', currentUser.username);
-  });
-
-  // Handle user logout
-  socket.on('logout', async (username) => {
-    try {
-      // Find the user in the database
-      const user = await User.findOne({ username });
-      if (!user) return;
-
-      // Delete all messages sent by the user
-      await Message.deleteMany({ sender: user._id });
-
-      // Delete the user from the database
-      await User.deleteOne({ _id: user._id });
-
-      // Remove from active users
-      activeUsers.delete(socket.id);
-
-      // Notify all clients
-      io.emit('userLeft', username);
-
-      // Update user list
-      const userList = Array.from(activeUsers.values()).map(u => u.username);
-      io.emit('userList', userList);
-
-      // Notify the user about successful logout
-      socket.emit('logoutSuccess');
-      
-      console.log(`${username} user logged out and deleted`);
-    } catch (error) {
-      console.error('Error in logout event:', error);
-    }
   });
 
   // Handle user disconnect

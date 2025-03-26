@@ -111,12 +111,12 @@ async function sendRandomMessage(users, currentRoomId) {
 async function main() {
     try {
 
-        const numUsers = 20; // Adjust the number of users as needed
+        const numUsers = 1000; // Adjust the number of users as needed
         const { users, generalRoom } = await createUsers(numUsers);
         const currentRoomId = generalRoom._id;
         console.log('Broadcasting message to room: ', currentRoomId);
 
-        const n = 5; // Duration in seconds
+        const n = 25; // Duration in seconds
         const interval = 5; // Interval in milliseconds
 
         const intervalId = setInterval(() => {
@@ -131,18 +131,47 @@ async function main() {
         }, n * 1000);
 
         setTimeout(async () => {
-            try {
-                const totalMessagesInDb = await Message.countDocuments({});
-                console.log(`Broadcasting Completed to room: ${currentRoomId} with ${totalMessagesInDb} messages`);
-            } catch (dbError) {
-                console.error('Error querying total messages from database:', dbError);
-            }
+            // Call the API endpoint to get the number of messages
+            const response = await axios.get(`${SERVER_URL}/api/message-count`);
+            const messageCount = response.data.count;
+
+            // Generate report
+            const report = {
+                "Total Messages Sent": messageCount,
+                "Number of Clients Connected": numUsers,
+                "Duration of the Test ": `${n} seconds`,
+                "Messages sent every ": `${interval} ms`,
+                "Average Messages/Sec": `${messageCount / n} messages/sec`,
+                "Time of Test Completion": formatDate(Date.now())
+            };
+
+            // Write report to file
+            const reportPath = path.join("../perf_results", 'load_test_report.json');
+            fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+            console.log('Performance Report generated at', formatDate(Date.now()));
             process.exit(0);
-        }, 60000); // Exit after 15 seconds
+
+        }, 100000);
 
     } catch (error) {
         console.error('Error in main:', error);
     }
+}
+
+function formatDate(timestamp) {
+    const date = new Date(timestamp);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Month is 0-indexed
+    const year = date.getFullYear();
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    const formattedTime = String(hours).padStart(2, '0') + ':' + minutes + ':' + seconds + ' ' + ampm;
+
+    return `${day}/${month}/${year} ${formattedTime}`;
 }
 
 main();

@@ -188,6 +188,17 @@ app.post('/api/save-message', async (req, res) => {
   }
 });
 
+// New API endpoint to get the number of messages in the collection
+app.get('/api/message-count', async (req, res) => {
+  try {
+    const messageCount = await Message.countDocuments({});
+    res.json({ success: true, count: messageCount });
+  } catch (error) {
+    console.error('Error fetching message count:', error);
+    res.status(500).json({ message: 'Error fetching message count' });
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
   let currentUser = null;
