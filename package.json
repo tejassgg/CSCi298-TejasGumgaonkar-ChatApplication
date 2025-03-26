@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node loadtest2.js",
     "dev": "nodemon server.js"
   },
   "keywords": [],
@@ -17,6 +17,7 @@
     "express": "^4.21.2",
     "mongoose": "^8.12.2",
     "multer": "^1.4.5-lts.2",
+    "perf_hooks": "^0.0.1",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
   },

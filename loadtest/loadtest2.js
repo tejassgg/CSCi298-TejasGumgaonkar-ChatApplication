@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
+const { PerformanceObserver, performance } = require('perf_hooks');
 require('dotenv').config();
 
 // Import models
-const User = require('./models/User');
-const ChatRoom = require('./models/ChatRoom');
+const User = require('../models/User');
+const ChatRoom = require('../models/ChatRoom');
 
 const SERVER_URL = 'http://localhost:3000';
 
@@ -30,32 +31,10 @@ async function createUsers(numUsers) {
   }
 }
 
-async function getUsersAndGeneralRoom() {
-  try {
-    // Connect to MongoDB
-    const mongoURI = process.env.MONGODB_URI;
-    await mongoose.connect(mongoURI);
-
-    // Retrieve users and general room from the database
-    const users = await User.find();
-    const generalRoom = await ChatRoom.findOne({ name: 'General' });
-
-    await mongoose.disconnect();
-
-    return { users, generalRoom };
-  } catch (error) {
-    console.error('Error in getUsersAndGeneralRoom:', error);
-  }
-}
-
 async function sendRandomMessage(users, generalRoom) {
   try {
     const response = await fetch(`${SERVER_URL}/api/send-random-message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ users, generalRoom })
+      method: 'POST'
     });
 
     if (!response.ok) {
@@ -70,21 +49,28 @@ async function sendRandomMessage(users, generalRoom) {
 }
 
 async function main() {
-  await createUsers(50); // Adjust the number of users as needed
+  await createUsers(100); // Adjust the number of users as needed
 
-  const { users, generalRoom } = await getUsersAndGeneralRoom();
+  // Measure CPU execution time for specific durations
+  const duration = 10000; // Total duration in milliseconds (e.g., 10 seconds)
+  const intervals = [0.05, 0.10, 0.25, 0.50, 0.75, 1.00];
+  const times = [];
 
-  // Export the users and generalRoom data
-  const data = { users, generalRoom };
-  const resultsDir = path.join(__dirname, 'perf_results');
-  if (!fs.existsSync(resultsDir)) {
-    fs.mkdirSync(resultsDir);
+  for (const interval of intervals) {
+    const intervalTime = interval * duration;
+    const startTime = performance.now();
+    
+    const endTime = startTime + intervalTime;
+    while (performance.now() < endTime) {
+      await sendRandomMessage(users, generalRoom);
+    }
+
+    const cpuTime = performance.now() - startTime;
+    times.push({ percentage: interval * 100, cpuTime });
   }
-  const resultsFile = path.join(resultsDir, 'users_and_generalRoom.json');
-  fs.writeFileSync(resultsFile, JSON.stringify(data, null, 2));
 
-  // Call the send-random-message API
-  await sendRandomMessage(users, generalRoom);
+  const cpuTimesFile = path.join(resultsDir, 'cpu_times.json');
+  fs.writeFileSync(cpuTimesFile, JSON.stringify(times, null, 2));
 }
 
 main();

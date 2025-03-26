@@ -15,6 +15,8 @@ const Message = require('./models/Message');
 // Import file upload utility
 const upload = require('./utils/fileUpload');
 
+const SERVER_URL = 'http://localhost:3000';
+
 // Connect to MongoDB
 const connectDB = async () => {
   try {
@@ -120,6 +122,15 @@ app.post('/api/create-users', async (req, res) => {
       return res.status(500).json({ message: 'General chat room not found' });
     }
 
+    await Message.deleteMany({});
+    console.log('All messages deleted');
+
+    // Delete all users except 'tejassgg', 'admin', and 'system'
+    await User.deleteMany({
+      username: { $nin: ['tejassgg', 'admin', 'system'] }
+    });
+    console.log('All Users deleted');
+
     // Create users
     for (let i = 0; i < numUsers; i++) {
       const username = `testuser${i}`;
@@ -167,7 +178,6 @@ app.post('/api/create-users', async (req, res) => {
 // Updated API endpoint to send random message from a random user
 app.post('/api/send-random-message', async (req, res) => {
   try {
-    const { users, generalRoom } = req.body;
 
     if (!users.length || !generalRoom) {
       return res.status(400).json({ message: 'No users or chat room found' });
