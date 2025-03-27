@@ -34,13 +34,21 @@ let clients = [];
 
 async function createUsers(numUsers) {
     try {
-        const response = await axios.post(`${SERVER_URL}/api/create-users`, {
-            numUsers
-        });
+        // const response = await axios.post(`${SERVER_URL}/api/create-users`, {
+        //     numUsers
+        // });
 
-        if (response.status !== 200) {
-            throw new Error(`Failed to create users: ${response.statusText}`);
-        }
+        // if (response.status !== 200) {
+        //     throw new Error(`Failed to create users: ${response.statusText}`);
+        // }
+
+        const response = await axios.get(`${SERVER_URL}/api/get-users`, {
+            params: { numUsers }
+          });
+      
+          if (response.status !== 200) {
+            throw new Error(`Failed to get users: ${response.statusText}`);
+          }
 
         const { users, generalRoom } = response.data;
 
@@ -111,7 +119,7 @@ async function sendRandomMessage(users, currentRoomId) {
 async function main() {
     try {
 
-        const numUsers = 1000; // Adjust the number of users as needed
+        const numUsers = 100; // Adjust the number of users as needed
         const { users, generalRoom } = await createUsers(numUsers);
         const currentRoomId = generalRoom._id;
         console.log('Broadcasting message to room: ', currentRoomId);

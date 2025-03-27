@@ -223,12 +223,12 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
             messageDiv.innerHTML = `
-                                        <div class="message-content">
-                                            <strong>${data.username}</strong><br>
-                                            ${data.text}
-                                        </div>
-                                        <div class="timestamp">${data.timestamp}</div>
-                `;
+                <div class="message-content">
+                    <strong>${data.username}</strong><br>
+                    ${data.text}
+                </div>
+                <div class="timestamp">${data.timestamp}</div>
+            `;
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         });
@@ -293,7 +293,7 @@
         });
 
         socket.on('userList', (users) => {
-            userList.textContent = users.join(', ');
+            renderUserList(users);
         });
 
         let typingTimeout;
@@ -304,6 +304,28 @@
                 typingIndicator.textContent = '';
             }, 1000);
         });
+
+        // Function to render user list with "show more" functionality
+        function renderUserList(users) {
+            userList.innerHTML = '';
+            const maxUsersToShow = 8;
+
+            users.slice(0, maxUsersToShow).forEach(user => {
+                const userSpan = document.createElement('span');
+                userSpan.textContent = user + ', ';
+                userList.appendChild(userSpan);
+            });
+
+            if (users.length > maxUsersToShow) {
+                const moreSpan = document.createElement('span');
+                moreSpan.textContent = '...show more';
+                moreSpan.className = 'more-btn';
+                moreSpan.addEventListener('click', () => {
+                    userList.innerHTML = users.join(', ');
+                });
+                userList.appendChild(moreSpan);
+            }
+        }
     </script>
 </body>
 

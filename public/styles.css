@@ -15,7 +15,7 @@ body {
     margin: 20px auto;
     background: white;
     border-radius: 10px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     height: calc(100vh - 40px);
     display: flex;
     flex-direction: column;
@@ -151,7 +151,8 @@ body {
     border-radius: 20px;
     cursor: pointer;
     margin-left: 10px;
-    display: none; /* Initially hide the logout button */
+    display: none;
+    /* Initially hide the logout button */
 }
 
 #logoutButton:hover {
@@ -184,7 +185,8 @@ body {
         flex-direction: column;
     }
 
-    #sendButton, #uploadButton {
+    #sendButton,
+    #uploadButton {
         width: 100%;
     }
 }

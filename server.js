@@ -199,6 +199,27 @@ app.get('/api/message-count', async (req, res) => {
   }
 });
 
+// New API endpoint to get a list of users based on the number of users passed
+app.get('/api/get-users', async (req, res) => {
+  try {
+    const { numUsers } = req.query;
+
+    if (!numUsers) {
+      return res.status(400).json({ message: 'numUsers query parameter is required' });
+    }
+
+    await Message.deleteMany({});
+    console.log('All messages deleted');
+
+    const usersList = await User.find().limit(parseInt(numUsers));
+    res.json({ success: true, users: usersList, generalRoom });
+
+  } catch (error) {
+    console.error('Error in get-users endpoint:', error);
+    res.status(500).json({ message: 'Error fetching users' });
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
   let currentUser = null;
@@ -248,7 +269,7 @@ io.on('connection', async (socket) => {
         const userList = Array.from(activeUsers.values()).map(u => u.username);
         io.emit('userList', userList);
 
-        console.log(`${username} user connected`);
+        // console.log(`${username} user connected`);
       });
     } catch (error) {
       console.error('Error in join event:', error);
