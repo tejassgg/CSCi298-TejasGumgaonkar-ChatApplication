@@ -1,3 +1,4 @@
+// Modified server.js
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -86,20 +87,19 @@ app.post('/api/upload', upload.single('media'), async (req, res) => {
     }
 
     // Extract necessary data from the request
-    const { chatRoomId, senderId, messageType } = req.body;
     const filePath = `/uploads/${req.file.filename}`;
-
-    // Create a new message in the database
-    const newMessage = new Message({
-      chatRoom: chatRoomId,
-      sender: senderId,
-      messageType: messageType,
-      mediaUrl: filePath,
-      fileName: req.file.originalname,
-      fileSize: req.file.size
+    // Save the file inside the uploads folder
+    const uploadDir = path.join(__dirname, 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    const fileDest = path.join(uploadDir, req.file.filename);
+    fs.rename(req.file.path, fileDest, (err) => {
+      if (err) {
+        console.error('Error saving file:', err);
+        return res.status(500).json({ message: 'Error saving file' });
+      }
     });
-
-    await newMessage.save();
 
     res.json({
       success: true,
@@ -107,7 +107,6 @@ app.post('/api/upload', upload.single('media'), async (req, res) => {
       fileName: req.file.originalname,
       fileSize: req.file.size,
       fileType: req.file.mimetype,
-      message: newMessage
     });
 
     // Asynchronously write details to a log file
@@ -123,15 +122,6 @@ app.post('/api/upload', upload.single('media'), async (req, res) => {
   }
 });
 
-// API to get current room and user ID
-app.get('/api/current-room-user', (req, res) => {
-  const user = activeUsers.get(req.query.socketId);
-  if (user) {
-    res.json({ currentRoomId: user.roomId, currentUserId: user.userId });
-  } else {
-    res.status(404).json({ message: 'User not found' });
-  }
-});
 
 // New API endpoint to create n users
 app.post('/api/create-users', async (req, res) => {
@@ -185,7 +175,6 @@ app.post('/api/create-users', async (req, res) => {
 // New API endpoint to save messages
 app.post('/api/save-message', async (req, res) => {
   try {
-    // console.log(req.body);
     const { chatRoomId, senderId, messageType, text, mediaUrl, fileName, fileSize } = req.body;
 
     const newMessage = new Message({
@@ -241,18 +230,6 @@ app.get('/api/get-users', async (req, res) => {
     console.error('Error in get-users endpoint:', error);
     res.status(500).json({ message: 'Error fetching users' });
   }
-});
-
-app.get('/api/current-room-and-user', (req, res) => {
-  const socketId = req.query.socketId;
-  const user = activeUsers.get(socketId);
-  if (user) {
-    return res.json({
-      currentRoomId: user.roomId,
-      currentUserId: user.userId
-    });
-  }
-  return res.status(404).json({ error: 'User not found' });
 });
 
 // Socket.IO connection handling
@@ -344,8 +321,6 @@ io.on('connection', async (socket) => {
       if (!currentUser || !currentRoom) return;
 
       const { mediaUrl, mediaType, fileName, fileSize } = data;
-      console.log('Media message sent from here');
-      console.log('Media message:', data);
 
       // Create new media message in database
       const newMessage = new Message({
@@ -372,7 +347,6 @@ io.on('connection', async (socket) => {
 
       // Broadcast message to room
       io.to(currentRoom.toString()).emit('mediaMessage', messageData);
-      // socket.emit('mediaMessage', messageData);  // Send to sender as well
     } catch (error) {
       console.error('Error in mediaMessage event:', error);
     }

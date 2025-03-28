@@ -1,11 +1,14 @@
+<!-- Modified index.html -->
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Application</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <div class="chat-container">
         <div class="chat-header">
@@ -90,22 +93,31 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const mediaData = event.target.result;
-                const mediaType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+            const formData = new FormData();
+            formData.append('media', file);
+            formData.append('messageType', file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file');
 
-                socket.emit('mediaMessage', {
-                    media: mediaData,
-                    mediaType: mediaType,
-                    fileName: file.name,
-                    fileSize: file.size
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        socket.emit('mediaMessage', {
+                            mediaUrl: data.filePath,
+                            mediaType: file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file',
+                            fileName: data.fileName,
+                            fileSize: data.fileSize
+                        });
+                    } else {
+                        console.error('File upload failed:', data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('File upload error:', error);
                 });
 
-                addTempMediaMessage(file.name, mediaType);
-            };
-
-            reader.readAsArrayBuffer(file);
             e.target.value = ''; // Reset input
         }
 
@@ -215,4 +227,5 @@
         });
     </script>
 </body>
+
 </html>

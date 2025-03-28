@@ -190,3 +190,10 @@ body {
         width: 100%;
     }
 }
+
+.media-container img.media-attachment {
+    width: 250px;
+    height: 250px;
+    object-fit: cover;
+    border-radius: 10px;
+}
