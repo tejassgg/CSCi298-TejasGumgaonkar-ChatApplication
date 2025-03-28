@@ -4,8 +4,28 @@ const axios = require('axios');
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
+const { duplexPair } = require('stream');
 
 const SERVER_URL = 'http://localhost:3000';
+
+const messages = [
+    'Hello from user!',
+    'How is everyone doing?',
+    'Testing the chat system',
+    'This is a test message',
+    'Load testing in progress',
+    'I am getting a response',
+    'I am doing good. How about you?',
+    'This is a long message that should be split into multiple packets',
+    'This is a message with a 🚀 emoji',
+    'This is a message with a 🤖 emoji'
+];
+// Function to get a random message
+function getRandomMessage() {
+
+    const randomIndex = Math.floor(Math.random() * messages.length);
+    return messages[randomIndex];
+}
 
 // Function to create users
 async function createUsers(numUsers) {
@@ -42,14 +62,45 @@ function getRandomUser(users) {
     return users[randomIndex];
 }
 
+// Function to load files from a folder
+const loadFilesFromFolder = (folderPath) => {
+    return new Promise((resolve, reject) => {
+        fs.readdir(folderPath, (err, files) => {
+            if (err) {
+                return reject(err);
+            }
+            const filePaths = files.map(file => path.join(folderPath, file));
+            resolve(filePaths);
+        });
+    });
+};
+
+const getRandomFilePath = (files) => {
+    const randomIndex = Math.floor(Math.random() * files.length);
+    return files[randomIndex];
+};
+
+const uploadFile = async (filePath) => {
+    const formData = new FormData();
+    formData.append('media', fs.createReadStream(filePath));
+
+    const response = await axios.post(`${SERVER_URL}/api/upload`, formData);
+
+    if (response.status !== 200) {
+        throw new Error(`Failed to upload file: ${response.statusText}`);
+    }
+
+    return response.data.filePath;
+};
+
 // Function to setup autocannon
-function setupAutocannon(users, duration = 10) {
+function setupAutocannon(users, files, duration = 10) {
     console.log('Setting up autocannon...');
     autocannon({
         title: 'Chat Load Test',
         url: SERVER_URL,
-        connections: users.length, // Number of concurrent connections
-        duration: 20, // Test duration in seconds
+        connections: users.length,
+        duration: duration,
         setupClient: (client) => {
             const user = getRandomUser(users);
             const socket = io(SERVER_URL, {
@@ -57,115 +108,116 @@ function setupAutocannon(users, duration = 10) {
                 reconnection: false
             });
 
-            socket.on('connect', () => {
+            let messageCount = 0;
+
+            socket.on('connect', async () => {
                 socket.emit('join', user.username);
-                client.on('response', (status, body, context) => {
-                    socket.emit('chatMessage', getRandomMessage());
+                client.on('response', async (status, body, context) => {
+                    if (messageCount % 50 === 0) {
+                        // const filePath = await uploadFile(getRandomFilePath(files));
+
+                        const filePath = getRandomFilePath(files);
+                        console.log('filePath:', filePath);
+                        socket.emit('mediaMessage', {
+                            mediaUrl: filePath,
+                            mediaType: 'image',
+                            fileName: path.basename(filePath),
+                            fileSize: fs.statSync(filePath).size
+                        });
+                    } else {
+                        socket.emit('chatMessage', getRandomMessage());
+                    }
+                    messageCount++;
                 });
             });
 
             socket.on('connect_error', (err) => {
-                console.error(`Client ${user.username} connection error: ${err.message}`);
+                console.error(`${user.username} connection error: ${err.message}`);
             });
         }
-    }, (err, autocannonResults) => {
+    }, (err, res) => {
         if (err) {
             console.error('Autocannon encountered an error:', err);
         } else {
-            // console.log('Autocannon results:', autocannonResults);
-            // Extract meaningful insights with units
-            const insights = {
-                testTitle: autocannonResults.title,
-                urlTested: autocannonResults.url,
-                connections: `${autocannonResults.connections} connections`,
-                duration: `${autocannonResults.duration} seconds`,
-                totalRequests: `${autocannonResults.requests.total} requests`,
-                total2xxResponses: `${autocannonResults['2xx']} responses`,
-                averageLatency: `${autocannonResults.latency.average} ms`,
-                maxLatency: `${autocannonResults.latency.max} ms`,
-                averageRequestsPerSecond: `${autocannonResults.requests.average} requests/second`,
-                maxRequestsPerSecond: `${autocannonResults.requests.max} requests/second`,
-                averageThroughput: `${autocannonResults.throughput.average} B/sec`,
-                maxThroughput: `${autocannonResults.throughput.max} B/sec`,
-                failureCases: {
-                    errors: autocannonResults.errors,
-                    timeouts: autocannonResults.timeouts,
-                    mismatches: autocannonResults.mismatches,
-                    non2xx: autocannonResults.non2xx,
-                    resets: autocannonResults.resets,
-                },
-                percentiles: {
-                    latency: autocannonResults.latency,
-                    requests: autocannonResults.requests,
-                    throughput: autocannonResults.throughput
-                }
-            };
-
-            // Add current date and time, and the current user's login
-            const metadata = {
-                currentDateTime: formatDate(Date.now()),
-                currentUserLogin: 'tejassgg'
-            };
-
-            // Combine insights and metadata
-            const result = {
-                insights,
-                metadata
-            };
-
-            // Ensure the perf_results directory exists
-            const resultsDir = path.join(__dirname, '../perf_results');
-            if (!fs.existsSync(resultsDir)) {
-                fs.mkdirSync(resultsDir, { recursive: true });
-            }
-
-            // Save the insights to a JSON file
-            const timestamp = new Date().toLocaleString("en-US").replaceAll(", ", "_").replaceAll("/", "-").replaceAll(" ", "");
-            const filename = `autocannon_insights_${timestamp}.json`;
-            const filePath = path.join(resultsDir, filename);
-
-            fs.writeFileSync(filePath, JSON.stringify(result, null, 2), 'utf-8');
-
+            const result = getInsigthfulResults(res);
+            CheckandSavetoFile(result);
             console.log(`Autocannon insights saved to ${filePath}`);
         }
     });
 }
 
+function CheckandSavetoFile(result) {
+    // Ensure the perf_results directory exists
+    const resultsDir = path.join(__dirname, '../perf_results');
+    if (!fs.existsSync(resultsDir)) {
+        fs.mkdirSync(resultsDir, { recursive: true });
+    }
 
-const messages = [
-    'Hello from user!',
-    'How is everyone doing?',
-    'Testing the chat system',
-    'This is a test message',
-    'Load testing in progress',
-    'I am getting a response',
-    'I am doing good. How about you?',
-    'This is a long message that should be split into multiple packets',
-    'This is a message with a 🚀 emoji',
-    'This is a message with a 🤖 emoji'
-];
-// Function to get a random message
-function getRandomMessage() {
+    // Save the insights to a JSON file
+    const filename = `autocannon_insights_${getDate()}.json`;
+    const filePath = path.join(resultsDir, filename);
 
-    const randomIndex = Math.floor(Math.random() * messages.length);
-    return messages[randomIndex];
+    fs.writeFileSync(filePath, JSON.stringify(result, null, 2), 'utf-8');
+}
+
+const getDate = () => {
+    return new Date().toLocaleString("en-US").toString("MM-dd-YYYY").replaceAll(", ", "_").replaceAll("/", "-").replaceAll(" ", "").replaceAll(":", "-")
+}
+
+// Function to extract meaningful insights from autocannon results
+function getInsigthfulResults(res) {
+    const insights = {
+        testTitle: res.title,
+        urlTested: res.url,
+        connections: `${res.connections} connections`,
+        duration: `${res.duration} seconds`,
+        totalRequests: `${res.requests.total} requests`,
+        total2xxResponses: `${res['2xx']} responses`,
+        averageLatency: `${res.latency.average} ms`,
+        maxLatency: `${res.latency.max} ms`,
+        averageRequestsPerSecond: `${res.requests.average} requests/second`,
+        maxRequestsPerSecond: `${res.requests.max} requests/second`,
+        averageThroughput: `${res.throughput.average / 1024} KB/sec`,
+        maxThroughput: `${res.throughput.max / 1024} KB/sec`,
+        failureCases: {
+            errors: res.errors,
+            timeouts: res.timeouts,
+            mismatches: res.mismatches,
+            non2xx: res.non2xx,
+            resets: res.resets,
+        },
+        percentiles: {
+            latency: res.latency,
+            requests: res.requests,
+            throughput: res.throughput
+        }
+    };
+
+    // Add current date and time, and the current user's login
+    const metadata = {
+        currentDateTime: formatDate(Date.now()),
+        currentUserLogin: 'tejassgg'
+    };
+
+    // Combine insights and metadata
+    return { insights, metadata };
 }
 
 // Main function to run the test
 async function main() {
     try {
-        const numUsers = 10; // Adjust the number of users as needed
-        const duration = 5; // Test duration in seconds
+        const numUsers = 15; // Adjust the number of users as needed
+        const duration = 10; // Test duration in seconds
         const users = await createUsers(numUsers);
+        const files = await loadFilesFromFolder('../images');
 
         if (users && users.length) {
-            setupAutocannon(users, duration);
+            setupAutocannon(users, files, duration);
         }
     } catch (error) {
         console.error('Error in main:', error);
     }
 }
-
 
 function formatDate(timestamp) {
     const date = new Date(timestamp);

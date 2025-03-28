@@ -79,20 +79,35 @@ const createDefaultRoom = async () => {
 createDefaultRoom();
 
 // Simple file upload endpoint for media
-app.post('/api/upload', upload.single('media'), (req, res) => {
+app.post('/api/upload', upload.single('media'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    // Return the file path
+    // Extract necessary data from the request
+    const { chatRoomId, senderId, messageType } = req.body;
     const filePath = `/uploads/${req.file.filename}`;
+
+    // Create a new message in the database
+    const newMessage = new Message({
+      chatRoom: chatRoomId,
+      sender: senderId,
+      messageType: messageType,
+      mediaUrl: filePath,
+      fileName: req.file.originalname,
+      fileSize: req.file.size
+    });
+
+    await newMessage.save();
+
     res.json({
       success: true,
       filePath,
       fileName: req.file.originalname,
       fileSize: req.file.size,
-      fileType: req.file.mimetype
+      fileType: req.file.mimetype,
+      message: newMessage
     });
 
     // Asynchronously write details to a log file
@@ -100,13 +115,21 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
     fs.writeFile('upload_log.txt', logData, { flag: 'a' }, (err) => {
       if (err) {
         console.error('Error writing to log file:', err);
-      } else {
-        console.log('Log file updated');
       }
     });
   } catch (error) {
     console.error('File upload error:', error);
     res.status(500).json({ message: 'Error uploading file' });
+  }
+});
+
+// API to get current room and user ID
+app.get('/api/current-room-user', (req, res) => {
+  const user = activeUsers.get(req.query.socketId);
+  if (user) {
+    res.json({ currentRoomId: user.roomId, currentUserId: user.userId });
+  } else {
+    res.status(404).json({ message: 'User not found' });
   }
 });
 
@@ -220,6 +243,18 @@ app.get('/api/get-users', async (req, res) => {
   }
 });
 
+app.get('/api/current-room-and-user', (req, res) => {
+  const socketId = req.query.socketId;
+  const user = activeUsers.get(socketId);
+  if (user) {
+    return res.json({
+      currentRoomId: user.roomId,
+      currentUserId: user.userId
+    });
+  }
+  return res.status(404).json({ error: 'User not found' });
+});
+
 // Socket.IO connection handling
 io.on('connection', async (socket) => {
   let currentUser = null;
@@ -228,9 +263,7 @@ io.on('connection', async (socket) => {
   // Handle user joining
   socket.on('join', async (username) => {
     try {
-      // Use process.nextTick to defer database operations
       process.nextTick(async () => {
-        // Find or create user - simplified with no password
         let user = await User.findOne({ username });
 
         if (!user) {
@@ -240,7 +273,6 @@ io.on('connection', async (socket) => {
           });
           await user.save();
         } else {
-          // Update user status
           user.status = 'online';
           user.lastActive = Date.now();
           await user.save();
@@ -249,17 +281,17 @@ io.on('connection', async (socket) => {
         currentUser = user;
 
         // Find default room
-        currentRoom = generalRoom._id;
-        // console.log(currentRoom);
+        const defaultRoom = await ChatRoom.findOne({ name: 'General' });
+        currentRoom = defaultRoom._id;
 
         // Join socket room
-        socket.join(generalRoom._id.toString());
+        socket.join(defaultRoom._id.toString());
 
         // Store user in active users map
         activeUsers.set(socket.id, {
           userId: user._id,
           username: user.username,
-          roomId: generalRoom._id
+          roomId: defaultRoom._id
         });
 
         // Notify all clients about the new user
@@ -269,7 +301,7 @@ io.on('connection', async (socket) => {
         const userList = Array.from(activeUsers.values()).map(u => u.username);
         io.emit('userList', userList);
 
-        // console.log(`${username} user connected`);
+        console.log(`${username} user connected`);
       });
     } catch (error) {
       console.error('Error in join event:', error);
@@ -312,15 +344,17 @@ io.on('connection', async (socket) => {
       if (!currentUser || !currentRoom) return;
 
       const { mediaUrl, mediaType, fileName, fileSize } = data;
+      console.log('Media message sent from here');
+      console.log('Media message:', data);
 
       // Create new media message in database
       const newMessage = new Message({
         chatRoom: currentRoom,
         sender: currentUser._id,
         messageType: mediaType,
-        mediaUrl,
-        fileName,
-        fileSize
+        mediaUrl: mediaUrl,
+        fileName: fileName,
+        fileSize: fileSize
       });
 
       await newMessage.save();
@@ -338,6 +372,7 @@ io.on('connection', async (socket) => {
 
       // Broadcast message to room
       io.to(currentRoom.toString()).emit('mediaMessage', messageData);
+      // socket.emit('mediaMessage', messageData);  // Send to sender as well
     } catch (error) {
       console.error('Error in mediaMessage event:', error);
     }

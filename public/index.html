@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Application</title>
     <link rel="stylesheet" href="styles.css">
 </head>
-
 <body>
     <div class="chat-container">
         <div class="chat-header">
@@ -30,6 +28,7 @@
             </div>
         </div>
     </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
         // Connect to Socket.IO server
@@ -44,6 +43,9 @@
         const typingIndicator = document.getElementById('typingIndicator');
         const userList = document.getElementById('userList');
         const logoutButton = document.getElementById('logoutButton');
+
+        let currentRoomId = null;
+        let currentUserId = null;
 
         // Get username from prompt
         let username = prompt('Please enter your username:');
@@ -88,55 +90,28 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            uploadMedia(file);
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const mediaData = event.target.result;
+                const mediaType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file';
+
+                socket.emit('mediaMessage', {
+                    media: mediaData,
+                    mediaType: mediaType,
+                    fileName: file.name,
+                    fileSize: file.size
+                });
+
+                addTempMediaMessage(file.name, mediaType);
+            };
+
+            reader.readAsArrayBuffer(file);
             e.target.value = ''; // Reset input
         }
 
-        // Generic media upload function
-        function uploadMedia(file) {
-            const formData = new FormData();
-            formData.append('media', file);
-            formData.append('chatRoomId', 'defaultRoomId'); // You'll need to get the actual room ID
-            formData.append('senderId', 'currentUserId'); // You'll need to get the actual user ID
-            formData.append('messageType', file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'file');
-
-            // Show upload indicator in chat
-            const tempMessageId = 'temp-' + Date.now();
-            addTempMediaMessage(tempMessageId, file.name, formData.get('messageType'));
-
-            // Upload to server
-            fetch('/api/messages/media', {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => {
-                    if (!response.ok) throw new Error('Upload failed');
-                    return response.json();
-                })
-                .then(data => {
-                    // Replace temp message with actual one
-                    replaceTempMessage(tempMessageId, data);
-
-                    // Emit socket event for real-time updates to other users
-                    socket.emit('mediaMessage', {
-                        mediaUrl: data.mediaUrl,
-                        mediaType: data.messageType,
-                        fileName: data.fileName,
-                        fileSize: data.fileSize
-                    });
-                })
-                .catch(error => {
-                    console.error('Error uploading media:', error);
-                    // Remove temp message and show error
-                    document.getElementById(tempMessageId)?.remove();
-                    addSystemMessage('Failed to upload media. Please try again.');
-                });
-        }
-
         // Add temporary media message while uploading
-        function addTempMediaMessage(id, fileName, mediaType) {
+        function addTempMediaMessage(fileName, mediaType) {
             const messageDiv = document.createElement('div');
-            messageDiv.id = id;
             messageDiv.className = 'message sent';
 
             let content = '';
@@ -152,70 +127,6 @@
             chatMessages.appendChild(messageDiv);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
-
-        // Replace temporary message with the real one
-        function replaceTempMessage(tempId, messageData) {
-            const tempMessage = document.getElementById(tempId);
-            if (!tempMessage) return;
-
-            tempMessage.id = messageData._id;
-
-            let content = '';
-            if (messageData.messageType === 'image') {
-                content = `
-            <div class="message-content">
-                <strong>${username}</strong><br>
-                <div class="media-container">
-                    <img src="${messageData.mediaUrl}" alt="Image" class="media-attachment">
-                </div>
-            </div>
-        `;
-            } else if (messageData.messageType === 'video') {
-                content = `
-            <div class="message-content">
-                <strong>${username}</strong><br>
-                <div class="media-container">
-                    <video controls class="media-attachment">
-                        <source src="${messageData.mediaUrl}" type="video/*">
-                        Your browser does not support video playback.
-                    </video>
-                </div>
-            </div>
-        `;
-            } else {
-                content = `
-            <div class="message-content">
-                <strong>${username}</strong><br>
-                <div class="file-attachment">
-                    <div class="file-icon"><i class="fas fa-file"></i></div>
-                    <a href="${messageData.mediaUrl}" target="_blank" class="file-name">${messageData.fileName}</a>
-                    <span class="file-size">${formatFileSize(messageData.fileSize)}</span>
-                </div>
-            </div>
-        `;
-            }
-
-            tempMessage.innerHTML = content + `<div class="timestamp">${new Date().toLocaleTimeString()}</div>`;
-        }
-
-        // Add a system message
-        function addSystemMessage(text) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'system-message';
-            messageDiv.textContent = text;
-            chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-
-        // Handle logout
-        logoutButton.addEventListener('click', () => {
-            socket.emit('logout', username);
-        });
-
-        socket.on('logoutSuccess', () => {
-            alert('You have been logged out successfully.');
-            location.reload(); // Reload the page or redirect to the login page
-        });
 
         // Socket event handlers
         socket.on('message', (data) => {
@@ -234,10 +145,8 @@
         });
 
         socket.on('mediaMessage', (data) => {
-            if (data.username === username) return; // Skip if it's our own message
-
             const messageDiv = document.createElement('div');
-            messageDiv.className = 'message received';
+            messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
             let content = '';
 
             if (data.mediaType === 'image') {
@@ -293,7 +202,7 @@
         });
 
         socket.on('userList', (users) => {
-            renderUserList(users);
+            userList.textContent = users.join(', ');
         });
 
         let typingTimeout;
@@ -304,29 +213,6 @@
                 typingIndicator.textContent = '';
             }, 1000);
         });
-
-        // Function to render user list with "show more" functionality
-        function renderUserList(users) {
-            userList.innerHTML = '';
-            const maxUsersToShow = 8;
-
-            users.slice(0, maxUsersToShow).forEach(user => {
-                const userSpan = document.createElement('span');
-                userSpan.textContent = user + ', ';
-                userList.appendChild(userSpan);
-            });
-
-            if (users.length > maxUsersToShow) {
-                const moreSpan = document.createElement('span');
-                moreSpan.textContent = '...show more';
-                moreSpan.className = 'more-btn';
-                moreSpan.addEventListener('click', () => {
-                    userList.innerHTML = users.join(', ');
-                });
-                userList.appendChild(moreSpan);
-            }
-        }
     </script>
 </body>
-
 </html>

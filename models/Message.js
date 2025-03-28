@@ -1,4 +1,3 @@
-// models/Message.js
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
@@ -15,49 +14,21 @@ const messageSchema = new mongoose.Schema({
   messageType: {
     type: String,
     enum: ['text', 'image', 'video', 'file'],
-    default: 'text'
+    required: true
   },
   text: {
     type: String,
-    required: function() {
+    required: function () {
       return this.messageType === 'text';
     }
   },
-  mediaUrl: {
-    type: String,
-    required: function() {
-      return ['image', 'video', 'file'].includes(this.messageType);
-    }
-  },
-  fileName: {
-    type: String,
-    trim: true
-  },
-  fileSize: {
-    type: Number
-  },
-  readBy: [{
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    readAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
+  mediaUrl: String,
+  fileName: String,
+  fileSize: Number,
   createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
     type: Date,
     default: Date.now
   }
 });
-
-// Add indexes for faster queries
-messageSchema.index({ chatRoom: 1, createdAt: -1 });
-messageSchema.index({ sender: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);
