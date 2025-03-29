@@ -4,7 +4,7 @@ const axios = require('axios');
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
-const { duplexPair } = require('stream');
+const FormData = require('form-data');
 
 const SERVER_URL = 'http://localhost:3000';
 
@@ -20,26 +20,15 @@ const messages = [
     'This is a message with a 🚀 emoji',
     'This is a message with a 🤖 emoji'
 ];
+
 // Function to get a random message
 function getRandomMessage() {
-
-    const randomIndex = Math.floor(Math.random() * messages.length);
-    return messages[randomIndex];
+    return messages[Math.floor(Math.random() * messages.length)];
 }
 
 // Function to create users
 async function createUsers(numUsers) {
     try {
-        // const response = await axios.post(`${SERVER_URL}/api/create-users`, {
-        //     numUsers
-        // });
-
-        // if (response.status !== 200) {
-        //     throw new Error(`Failed to create users: ${response.statusText}`);
-        // }
-
-        // return response.data.users;
-
         const response = await axios.get(`${SERVER_URL}/api/get-users`, {
             params: { numUsers }
         });
@@ -48,9 +37,7 @@ async function createUsers(numUsers) {
             throw new Error(`Failed to get users: ${response.statusText}`);
         }
 
-        const { users, generalRoom } = response.data;
-        return users;
-
+        return response.data.users;
     } catch (error) {
         console.error('Error in createUsers:', error);
     }
@@ -58,8 +45,7 @@ async function createUsers(numUsers) {
 
 // Function to get a random user
 function getRandomUser(users) {
-    const randomIndex = Math.floor(Math.random() * users.length);
-    return users[randomIndex];
+    return users[Math.floor(Math.random() * users.length)];
 }
 
 // Function to load files from a folder
@@ -69,17 +55,12 @@ const loadFilesFromFolder = (folderPath) => {
             if (err) {
                 return reject(err);
             }
-            const filePaths = files.map(file => path.join(folderPath, file));
-            resolve(filePaths);
+            resolve(files.map(file => path.join(folderPath, file)));
         });
     });
 };
 
-const getRandomFilePath = (files) => {
-    const randomIndex = Math.floor(Math.random() * files.length);
-    return files[randomIndex];
-};
-
+// Function to upload a file
 const uploadFile = async (filePath) => {
     const formData = new FormData();
     formData.append('media', fs.createReadStream(filePath));
@@ -90,7 +71,7 @@ const uploadFile = async (filePath) => {
         throw new Error(`Failed to upload file: ${response.statusText}`);
     }
 
-    return response.data.filePath;
+    return response.data;
 };
 
 // Function to setup autocannon
@@ -113,17 +94,21 @@ function setupAutocannon(users, files, duration = 10) {
             socket.on('connect', async () => {
                 socket.emit('join', user.username);
                 client.on('response', async (status, body, context) => {
-                    if (messageCount % 50 === 0) {
-                        // const filePath = await uploadFile(getRandomFilePath(files));
 
-                        const filePath = getRandomFilePath(files);
-                        console.log('filePath:', filePath);
-                        socket.emit('mediaMessage', {
-                            mediaUrl: filePath,
-                            mediaType: 'image',
-                            fileName: path.basename(filePath),
-                            fileSize: fs.statSync(filePath).size
-                        });
+
+
+                    if (messageCount % 10 === 0) {
+                        const filePath = files[Math.floor(Math.random() * files.length)];
+                        const fileData = await uploadFile(filePath);
+
+                        if (fileData.success) {
+                            socket.emit('mediaMessage', {
+                                mediaUrl: fileData.filePath,
+                                mediaType: 'image',
+                                fileName: path.basename(fileData.filePath),
+                                fileSize: fileData.fileSize
+                            });
+                        }
                     } else {
                         socket.emit('chatMessage', getRandomMessage());
                     }
@@ -141,7 +126,6 @@ function setupAutocannon(users, files, duration = 10) {
         } else {
             const result = getInsigthfulResults(res);
             CheckandSavetoFile(result);
-            console.log(`Autocannon insights saved to ${filePath}`);
         }
     });
 }
@@ -206,8 +190,8 @@ function getInsigthfulResults(res) {
 // Main function to run the test
 async function main() {
     try {
-        const numUsers = 15; // Adjust the number of users as needed
-        const duration = 10; // Test duration in seconds
+        const numUsers = 20; // Adjust the number of users as needed
+        const duration = 5; // Test duration in seconds
         const users = await createUsers(numUsers);
         const files = await loadFilesFromFolder('../images');
 

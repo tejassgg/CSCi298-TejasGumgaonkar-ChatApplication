@@ -27,7 +27,7 @@ const connectDB = async () => {
     console.log('MongoDB connected successfully');
   } catch (error) {
     console.error('MongoDB connection error:', error);
-    process.exit(1);
+    process.exit(-1);
   }
 };
 connectDB();
@@ -82,6 +82,7 @@ createDefaultRoom();
 // Simple file upload endpoint for media
 app.post('/api/upload', upload.single('media'), async (req, res) => {
   try {
+    console.log('File upload request received:', req);
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
