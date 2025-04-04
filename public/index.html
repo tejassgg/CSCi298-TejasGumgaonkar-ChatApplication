@@ -189,7 +189,7 @@
                 <div class="file-attachment">
                     <div class="file-icon"><i class="fas fa-file"></i></div>
                     <a href="${data.mediaUrl}" target="_blank" class="file-name">${data.fileName}</a>
-                    <span class="file-size">${formatFileSize(data.fileSize)}</span>
+                    <span class="file-size">${(data.fileSize/(1024*1024)).toFixed(2)} MB</span>
                 </div>
             </div>
         `;

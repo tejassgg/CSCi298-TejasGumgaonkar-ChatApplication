@@ -7,6 +7,7 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
+const axios = require('axios');
 
 // Import models
 const User = require('./models/User');
@@ -82,7 +83,6 @@ createDefaultRoom();
 // Simple file upload endpoint for media
 app.post('/api/upload', upload.single('media'), async (req, res) => {
   try {
-    console.log('File upload request received:', req);
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
@@ -123,7 +123,6 @@ app.post('/api/upload', upload.single('media'), async (req, res) => {
   }
 });
 
-
 // New API endpoint to create n users
 app.post('/api/create-users', async (req, res) => {
   try {
@@ -137,14 +136,13 @@ app.post('/api/create-users', async (req, res) => {
       return res.status(500).json({ message: 'General chat room not found' });
     }
 
-    await Message.deleteMany({});
-    console.log('All messages deleted');
-
     // Delete all users except 'tejassgg', 'admin', and 'system'
     await User.deleteMany({
       username: { $nin: ['tejassgg', 'admin', 'system'] }
     });
     console.log('All Users deleted');
+
+    console.log('Creating users...');
 
     // Create users
     for (let i = 0; i < numUsers; i++) {
@@ -167,6 +165,7 @@ app.post('/api/create-users', async (req, res) => {
     }
 
     res.json({ success: true, message: `${numUsers} users created`, users, generalRoom });
+
   } catch (error) {
     console.error('Error in create-users endpoint:', error);
     res.status(500).json({ message: 'Error in create-users endpoint' });
@@ -215,7 +214,7 @@ app.get('/api/message-count', async (req, res) => {
 // New API endpoint to get a list of users based on the number of users passed
 app.get('/api/get-users', async (req, res) => {
   try {
-    const { numUsers } = req.query;
+    let { numUsers } = req.query;
 
     if (!numUsers) {
       return res.status(400).json({ message: 'numUsers query parameter is required' });
@@ -224,8 +223,31 @@ app.get('/api/get-users', async (req, res) => {
     await Message.deleteMany({});
     console.log('All messages deleted');
 
-    const usersList = await User.find().limit(parseInt(numUsers));
-    res.json({ success: true, users: usersList, generalRoom });
+    numUsers = parseInt(numUsers);
+
+    const users = await User.find({});
+    if (users.length < numUsers) {
+
+      const data = { numUsers: numUsers }; // Data to send in the request body
+
+      axios.post('http://localhost:3000/api/create-users', data, { // Replace with your actual endpoint
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+        .then(response => {
+          if (response.data.success) {
+            res.json({ success: true, users: response.data.users, generalRoom });
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    }
+    else {
+      const usersList = await User.find().limit(parseInt(numUsers));
+      res.json({ success: true, users: usersList, generalRoom });
+    }
 
   } catch (error) {
     console.error('Error in get-users endpoint:', error);
