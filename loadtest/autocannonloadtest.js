@@ -1,6 +1,7 @@
 const autocannon = require('autocannon');
 const { io } = require('socket.io-client');
 const axios = require('axios');
+const os = require('os');
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
@@ -74,11 +75,40 @@ const uploadFile = async (filePath) => {
     return response.data;
 };
 
+// Function to get CPU utilization
+function getCpuUsage() {
+    const cpus = os.cpus();
+    let totalIdle = 0, totalTick = 0;
+    cpus.forEach(cpu => {
+        for (type in cpu.times) {
+            totalTick += cpu.times[type];
+        }
+        totalIdle += cpu.times.idle;
+    });
+    const idle = totalIdle / cpus.length;
+    const total = totalTick / cpus.length;
+    return (1 - idle / total) * 100;
+}
+
+// Function to get memory usage
+function getMemoryUsage() {
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    return ((totalMem - freeMem) / totalMem) * 100;
+}
+
 // Function to setup autocannon
 function setupAutocannon(users, files, duration = 10) {
     console.log('Setting up autocannon...');
 
     let messageCount = 0;
+    let cpuUsages = [];
+    let memoryUsages = [];
+
+    const interval = setInterval(() => {
+        cpuUsages.push(getCpuUsage());
+        memoryUsages.push(getMemoryUsage());
+    }, 1000);
 
     autocannon({
         title: 'Chat Load Test',
@@ -100,16 +130,16 @@ function setupAutocannon(users, files, duration = 10) {
                         const filePath = files[Math.floor(Math.random() * files.length)];
                         const fileData = await uploadFile(filePath);
                         var fileType = "";
-                        if(fileData.fileType.startsWith('image/')) {
+                        if (fileData.fileType.startsWith('image/')) {
                             fileType = 'image';
                         }
-                        else if(fileData.fileType.startsWith('video/')) {
+                        else if (fileData.fileType.startsWith('video/')) {
                             fileType = 'video';
                         }
-                        else if(fileData.fileType.startsWith('audio/')) {
+                        else if (fileData.fileType.startsWith('audio/')) {
                             fileType = 'audio';
                         }
-                        else if(fileData.fileType.startsWith('application/')) {
+                        else if (fileData.fileType.startsWith('application/')) {
                             fileType = 'file';
                         }
                         else {
@@ -138,10 +168,11 @@ function setupAutocannon(users, files, duration = 10) {
             });
         }
     }, (err, res) => {
+        clearInterval(interval);
         if (err) {
             console.error('Autocannon encountered an error:', err);
         } else {
-            const result = getInsigthfulResults(res);
+            const result = getInsigthfulResults(res, cpuUsages, memoryUsages);
             CheckandSavetoFile(result);
             console.log(`Testing Completed with ${users.length} users for ${duration} seconds and sent ${messageCount} messages`);
 
@@ -173,7 +204,7 @@ const getDate = () => {
 }
 
 // Function to extract meaningful insights from autocannon results
-function getInsigthfulResults(res) {
+function getInsigthfulResults(res, cpuUsages, memoryUsages) {
     const insights = {
         testTitle: res.title,
         urlTested: res.url,
@@ -187,6 +218,10 @@ function getInsigthfulResults(res) {
         maxRequestsPerSecond: `${res.requests.max} requests/second`,
         averageThroughput: `${(res.throughput.average / (1024 * 1024)).toFixed(2)} MB/sec`,
         maxThroughput: `${(res.throughput.max / (1024 * 1024)).toFixed(2)} MB/sec`,
+        averageCpuUsage: `${(cpuUsages.reduce((a, b) => a + b, 0) / cpuUsages.length).toFixed(2)}%`,
+        maxCpuUsage: `${Math.max(...cpuUsages).toFixed(2)}%`,
+        averageMemoryUsage: `${(memoryUsages.reduce((a, b) => a + b, 0) / memoryUsages.length).toFixed(2)}%`,
+        maxMemoryUsage: `${Math.max(...memoryUsages).toFixed(2)}%`,
         failureCases: {
             errors: res.errors,
             timeouts: res.timeouts,
@@ -230,7 +265,6 @@ async function main() {
             }
             console.log('All Files Deleted from Uploads Folder');
         });
-
 
         if (users && users.length) {
             setupAutocannon(users, files, duration);

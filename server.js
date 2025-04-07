@@ -301,7 +301,7 @@ io.on('connection', async (socket) => {
         const userList = Array.from(activeUsers.values()).map(u => u.username);
         io.emit('userList', userList);
 
-        console.log(`${username} user connected`);
+        // console.log(`${username} user connected`);
       });
     } catch (error) {
       console.error('Error in join event:', error);
@@ -433,7 +433,7 @@ io.on('connection', async (socket) => {
         const userList = Array.from(activeUsers.values()).map(u => u.username);
         io.emit('userList', userList);
 
-        console.log(`${currentUser.username} user disconnected`);
+        // console.log(`${currentUser.username} user disconnected`);
       }
     } catch (error) {
       console.error('Error in disconnect event:', error);
