@@ -19,7 +19,17 @@ const messages = [
     'I am doing good. How about you?',
     'This is a long message that should be split into multiple packets',
     'This is a message with a 🚀 emoji',
-    'This is a message with a 🤖 emoji'
+    'Lorem ipsum dolor sit amet consectetur adipiscing elit quisque faucibus ex sapien vitae pellentesque sem placerat in id cursus mi pretium tellus duis convallis tempus leo eu aenean sed diam urna tempor pulvinar vivamus fringilla lacus nec metus bibendum egestas iaculis massa nisl malesuada lacinia integer nunc posuere ut hendrerit semper vel class aptent taciti sociosqu ad litora torquent per conubia nostra inceptos himenaeos orci varius natoque penatibus et magnis dis parturient montes nascetur ridiculus mus donec rhoncus eros lobortis nulla molestie mattis scelerisque maximus eget fermentum odio phasellus non purus est efficitur laoreet mauris pharetra vestibulum fusce dictum risus blandit quis suspendisse aliquet nisi sodales consequat magna ante condimentum neque at luctus nibh finibus facilisis dapibus etiam interdum tortor ligula congue sollicitudin erat viverra ac tincidunt nam porta elementum a enim euismod quam justo lectus commodo augue arcu dignissim velit aliquam imperdiet mollis nullam volutpat porttitor ullamcorper rutrum gravida cras eleifend turpis fames primis vulputate ornare sagittis vehicula praesent dui felis venenatis ultrices proin libero feugiat tristique accumsan maecenas potenti ultricies habitant morbi senectus netus suscipit auctor curabitur facilisi cubilia curae hac habitasse platea dictumst lorem ipsum dolor sit amet consectetur adipiscing elit quisque faucibus ex sapien vitae pellentesque sem placerat in id cursus mi pretium tellus duis convallis tempus leo eu aenean sed diam urna tempor pulvinar vivamus fringilla lacus nec metus bibendum egestas iaculis massa nisl malesuada lacinia integer nunc posuere ut hendrerit semper vel class aptent taciti sociosqu ad litora torquent per conubia nostra inceptos himenaeos orci varius natoque penatibus et magnis dis parturient montes nascetur ridiculus mus donec rhoncus eros lobortis nulla molestie mattis scelerisque maximus eget fermentum odio phasellus non purus est efficitur laoreet mauris pharetra vestibulum fusce dictum risus blandit quis suspendisse aliquet nisi sodales consequat magna ante condimentum neque at luctus nibh.',
+    `Chocolate gingerbread sesame snaps cheesecake marshmallow. Gingerbread halvah lollipop cake bear claw pastry. Pie tiramisu jelly caramels caramels bear claw brownie.
+    Lemon drops fruitcake fruitcake dessert jujubes pastry chocolate sweet roll. Gummi bears fruitcake chocolate donut lemon drops soufflé jelly beans. Marshmallow marzipan jujubes icing cotton candy.
+    Cotton candy cupcake lemon drops bonbon jelly topping sugar plum. Bonbon cotton candy brownie lollipop tootsie roll biscuit sweet sesame snaps marshmallow. Powder chocolate bar dragée muffin wafer dessert.
+    Carrot cake cookie pastry chupa chups liquorice cookie halvah gummi bears oat cake. Biscuit brownie ice cream pie wafer oat cake lemon drops. Bear claw sweet roll jelly beans lemon drops gummi bears marshmallow dragée powder. Donut sugar plum sweet roll caramels jelly-o.
+    Tootsie roll macaroon icing cheesecake marzipan. Tart sesame snaps bonbon halvah cake marzipan shortbread jujubes. Candy canes dessert biscuit icing dessert tootsie roll cupcake cupcake.`,
+    `Carrot cake chocolate cake shortbread macaroon marzipan pastry cupcake dragée bear claw. Gingerbread dessert shortbread topping toffee. Wafer cookie sweet roll tootsie roll cheesecake pie cake jelly beans. Chocolate bar ice cream cupcake croissant macaroon marzipan chocolate. Pudding dessert lemon drops dragée tootsie roll. Soufflé soufflé cotton candy muffin soufflé bear claw. Tootsie roll chocolate cake gingerbread topping wafer pudding sweet sugar plum. Topping chocolate cake pudding chocolate cake candy canes dessert. Jujubes chocolate bar powder candy canes biscuit soufflé cheesecake biscuit. Croissant halvah candy liquorice wafer soufflé cheesecake.
+    Jujubes sweet roll danish oat cake carrot cake. Brownie soufflé tart tiramisu soufflé chocolate bar wafer tart. Cheesecake bonbon bonbon ice cream soufflé caramels shortbread sweet. Jelly-o sesame snaps sweet sweet roll danish sweet chupa chups. Jelly-o caramels tootsie roll bear claw ice cream. Cheesecake pudding cake jelly beans cookie dragée chocolate. Soufflé macaroon sugar plum fruitcake chocolate biscuit cheesecake. Sugar plum jujubes gummi bears marshmallow cheesecake. Cheesecake topping macaroon candy liquorice oat cake. Powder powder chupa chups jelly pastry marshmallow.
+    Gummi bears gummi bears jelly beans chocolate jujubes cake pastry. Gingerbread marshmallow marshmallow soufflé dragée pastry shortbread. Topping cake tootsie roll cake dessert lollipop. Jelly-o cotton candy topping cake jelly brownie biscuit. Pudding marzipan marshmallow muffin candy candy. Sugar plum danish marzipan cookie jelly chocolate cake chocolate. Muffin pastry candy pie jelly beans jelly apple pie cake. Cotton candy apple pie biscuit jelly beans jelly beans gingerbread sesame snaps candy canes.
+    Cotton candy macaroon cheesecake chocolate cake bear claw wafer donut. Sesame snaps bear claw gingerbread chupa chups dragée liquorice brownie lemon drops. Sweet marshmallow powder muffin chupa chups jelly-o jelly pie jelly. Biscuit tootsie roll wafer caramels cheesecake. Gingerbread jelly-o gummies liquorice topping bear claw. Oat cake jelly-o candy canes powder halvah marshmallow. Lemon drops toffee candy cotton candy gummi bears. Gummi bears bonbon cookie halvah tiramisu chocolate bar biscuit chupa chups.
+    Chocolate bar shortbread fruitcake chocolate jujubes cake pastry macaroon gummies. Gummies cake fruitcake croissant croissant marshmallow lemon drops sweet roll liquorice. Shortbread gingerbread cupcake gummies jujubes candy jelly dragée. Marshmallow donut pie cotton candy powder tootsie roll bear claw. Brownie cake cookie pudding chupa chups. Sesame snaps gummies cookie ice cream tiramisu gingerbread powder biscuit jelly.`
 ];
 
 // Function to get a random message
@@ -126,7 +136,7 @@ function setupAutocannon(users, files, duration = 10) {
                 socket.emit('join', user.username);
                 client.on('response', async (status, body, context) => {
 
-                    if (messageCount % 100 === 0) {
+                    if (messageCount % 100 == 0) {
                         const filePath = files[Math.floor(Math.random() * files.length)];
                         const fileData = await uploadFile(filePath);
                         var fileType = "";
@@ -145,8 +155,6 @@ function setupAutocannon(users, files, duration = 10) {
                         else {
                             fileType = 'other';
                         }
-
-                        //console.log(`File Type: ${fileType}`);
 
                         if (fileData.success) {
                             socket.emit('mediaMessage', {
@@ -173,6 +181,7 @@ function setupAutocannon(users, files, duration = 10) {
             console.error('Autocannon encountered an error:', err);
         } else {
             const result = getInsigthfulResults(res, cpuUsages, memoryUsages);
+            console.log('Autocannon results:', res);
             CheckandSavetoFile(result);
             console.log(`Testing Completed with ${users.length} users for ${duration} seconds and sent ${messageCount} messages`);
 

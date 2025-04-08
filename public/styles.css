@@ -138,6 +138,7 @@ body {
 }
 
 .system-message {
+    font-size: 10px;
     text-align: center;
     color: #65676b;
     margin: 10px 0;
@@ -191,7 +192,7 @@ body {
     }
 }
 
-.media-container img.media-attachment {
+.media-container .media-attachment {
     width: 250px;
     height: 250px;
     object-fit: cover;

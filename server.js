@@ -187,12 +187,23 @@ app.post('/api/save-message', async (req, res) => {
       fileSize
     });
 
-    await newMessage.save();
+    const msg = await newMessage.save();
 
-    res.json({
-      success: true,
-      message: newMessage
-    });
+    if (msg) {
+      const retrMsg = await Message.findByPk(msg.id);
+      if (retrMsg) {
+        res.json({
+          success: true,
+          message: newMessage
+        });
+      }
+    }
+    else {
+      res.json({
+        success: false,
+        message: newMessage
+      });
+    }
 
   } catch (error) {
     console.error('Error in save-message endpoint:', error);
@@ -321,18 +332,37 @@ io.on('connection', async (socket) => {
         text: message
       });
 
-      await newMessage.save();
+      const msg = await newMessage.save();
 
-      // Format message for client
-      const messageData = {
-        _id: newMessage._id,
-        username: currentUser.username,
-        text: message,
-        timestamp: new Date().toLocaleTimeString()
-      };
+      if (msg) {
+        const retrMsg = await Message.findById(msg._id);
+        if (retrMsg) {
+          // Format message for client
+          const messageData = {
+            _id: newMessage._id,
+            username: currentUser.username,
+            text: message,
+            timestamp: new Date().toLocaleTimeString()
+          };
 
-      // Broadcast message to room
-      io.to(currentRoom.toString()).emit('message', messageData);
+          // Broadcast message to room
+          io.to(currentRoom.toString()).emit('message', messageData);
+        }
+      }
+      else {
+       console.log('Message not saved in database');
+      }
+
+      // // Format message for client
+      // const messageData = {
+      //   _id: newMessage._id,
+      //   username: currentUser.username,
+      //   text: message,
+      //   timestamp: new Date().toLocaleTimeString()
+      // };
+
+      // // Broadcast message to room
+      // io.to(currentRoom.toString()).emit('message', messageData);
     } catch (error) {
       console.error('Error in chatMessage event:', error);
     }

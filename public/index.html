@@ -142,7 +142,7 @@
 
         // Socket event handlers
         socket.on('message', (data) => {
-            console.log(data.text);
+            // console.log(data.text);
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
             messageDiv.innerHTML = `
@@ -175,8 +175,7 @@
             <div class="message-content">
                 <strong>${data.username}</strong><br>
                 <div class="media-container">
-                    <video controls class="media-attachment">
-                        <source src="${data.mediaUrl}" type="video/*">
+                    <video controls class="media-attachment" src="${data.mediaUrl}">
                         Your browser does not support video playback.
                     </video>
                 </div>
@@ -214,7 +213,8 @@
         });
 
         socket.on('userList', (users) => {
-            userList.textContent = users.join(', ');
+            const limitedUsers = users.slice(0, 10); // Show only the first 10 users
+            userList.textContent = limitedUsers.join(', ');
         });
 
         let typingTimeout;
