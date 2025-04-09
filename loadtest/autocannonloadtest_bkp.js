@@ -107,12 +107,11 @@ function getMemoryUsage() {
     return ((totalMem - freeMem) / totalMem) * 100;
 }
 
-let messageCount = 0;
-let fileCount = 0;
 // Function to setup autocannon
 function setupAutocannon(users, files, duration = 10) {
     console.log('Setting up autocannon...');
 
+    let messageCount = 0;
     let cpuUsages = [];
     let memoryUsages = [];
 
@@ -120,10 +119,10 @@ function setupAutocannon(users, files, duration = 10) {
         cpuUsages.push(getCpuUsage());
         memoryUsages.push(getMemoryUsage());
     }, 1000);
-    console.log('Load Testing Started');
+
     autocannon({
         title: 'Chat Load Test',
-        url: `${SERVER_URL}/api/send-random-message`,
+        url: SERVER_URL,
         connections: users.length,
         duration: duration,
         setupClient: (client) => {
@@ -137,7 +136,7 @@ function setupAutocannon(users, files, duration = 10) {
                 socket.emit('join', user.username);
                 client.on('response', async (status, body, context) => {
 
-                    if ((messageCount + fileCount) % 200 == 0) {
+                    if (messageCount % 100 == 0) {
                         const filePath = files[Math.floor(Math.random() * files.length)];
                         const fileData = await uploadFile(filePath);
                         var fileType = "";
@@ -164,12 +163,11 @@ function setupAutocannon(users, files, duration = 10) {
                                 fileName: path.basename(fileData.filePath),
                                 fileSize: fileData.fileSize
                             });
-                            fileCount++;
                         }
                     } else {
                         socket.emit('chatMessage', getRandomMessage());
-                        messageCount++;
                     }
+                    messageCount++;
                 });
             });
 
@@ -183,11 +181,15 @@ function setupAutocannon(users, files, duration = 10) {
             console.error('Autocannon encountered an error:', err);
         } else {
             const result = getInsigthfulResults(res, cpuUsages, memoryUsages);
-            // console.log('Autocannon results:', res);
+            console.log('Autocannon results:', res);
             CheckandSavetoFile(result);
-            console.log(`Load Testing Completed with ${users.length} users for ${duration} seconds, sent ${messageCount} messages and ${fileCount} files`);
+            console.log(`Testing Completed with ${users.length} users for ${duration} seconds and sent ${messageCount} messages`);
+
+            process.exit(0); // Exit the process after the test
         }
     });
+
+
 }
 
 function CheckandSavetoFile(result) {
@@ -219,10 +221,6 @@ function getInsigthfulResults(res, cpuUsages, memoryUsages) {
         duration: `${res.duration} seconds`,
         totalRequests: `${res.requests.total} requests`,
         total2xxResponses: `${res['2xx']} responses`,
-        numberOfMessagesSent: messageCount,
-        numberOfFilesSent: fileCount,
-        differenceInMessagesAndFiles: messageCount - fileCount,
-        differenceInResponsesAndActual: res.requests.total - (messageCount + fileCount),
         averageLatency: `${res.latency.average} ms`,
         maxLatency: `${res.latency.max} ms`,
         averageRequestsPerSecond: `${res.requests.average} requests/second`,
@@ -257,46 +255,29 @@ function getInsigthfulResults(res, cpuUsages, memoryUsages) {
     return { insights, metadata };
 }
 
-// Countdown timer function (prints in one line)
-function countdown(seconds, callback) {
-    process.stdout.write(`Starting Test in: `);
-    let counter = seconds;
-    const interval = setInterval(() => {
-        if (counter > 0) {
-            process.stdout.write(`${counter} `); // Print the remaining seconds
-            counter--;
-        } else {
-            clearInterval(interval);
-            console.log(); // Move to the next line after the countdown finishes
-            callback();
-        }
-    }, 1000);
-}
-
 // Main function to run the test
 async function main() {
     try {
-        const numUsers = 75; // Adjust the number of users as needed
-        const duration = 20; // Test duration in seconds
-
+        const numUsers = 100; // Adjust the number of users as needed
+        const duration = 10; // Test duration in seconds
         const users = await getUsers(numUsers);
         const files = await loadFilesFromFolder('../images');
 
-        const folderPath = "../uploads";
-        const filestobeDeleted = fs.readdirSync(folderPath);
-        filestobeDeleted.forEach(file => {
-            const filePath = path.join(folderPath, file);
-            fs.unlinkSync(filePath);
+
+        fs.readdir('../uploads', (err, files) => {
+            if (err) throw err;
+
+            for (const file of files) {
+                fs.unlink(path.join('../uploads', file), (err) => {
+                    if (err) throw err;
+                });
+            }
+            console.log('All Files Deleted from Uploads Folder');
         });
 
-        console.log(`All files in folder "${folderPath}" deleted successfully.`);
-
         if (users && users.length) {
-            countdown(10, () => {
-                setupAutocannon(users, files, duration);
-            });
+            setupAutocannon(users, files, duration);
         }
-
     } catch (error) {
         console.error('Error in main:', error);
     }
