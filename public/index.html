@@ -142,7 +142,7 @@
 
         // Socket event handlers
         socket.on('message', (data) => {
-            // console.log(data.text);
+            console.log(data.text);
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
             messageDiv.innerHTML = `
@@ -157,6 +157,7 @@
         });
 
         socket.on('mediaMessage', (data) => {
+            console.log('Media Message Received');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
             let content = '';
@@ -166,7 +167,7 @@
             <div class="message-content">
                 <strong>${data.username}</strong><br>
                 <div class="media-container">
-                    <img src="${data.mediaUrl}" alt="Image" class="media-attachment">
+                    <img src="${data.mediaUrl}" loading="lazy" alt="Image" class="media-attachment">
                 </div>
             </div>
         `;
@@ -175,7 +176,7 @@
             <div class="message-content">
                 <strong>${data.username}</strong><br>
                 <div class="media-container">
-                    <video controls class="media-attachment" src="${data.mediaUrl}">
+                    <video controls class="media-attachment" loading="lazy" src="${data.mediaUrl}">
                         Your browser does not support video playback.
                     </video>
                 </div>
