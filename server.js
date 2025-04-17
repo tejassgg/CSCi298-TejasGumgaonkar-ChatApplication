@@ -8,6 +8,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 const axios = require('axios');
+const crypto = require('crypto'); // For generating unique file names
+const mime = require('mime-types');
 
 // Import models
 const User = require('./models/User');
@@ -103,9 +105,35 @@ const createDefaultRoom = async () => {
 
 createDefaultRoom();
 
+// Function to upload a file
+const uploadFile = async (filePath) => {
+  const formData = new FormData();
+  formData.append('media', fs.createReadStream(filePath));
+  const response = await axios.post(`${SERVER_URL}/api/upload`, formData);
+  if (response.status !== 200) {
+    throw new Error(`Failed to upload file: ${response.statusText}`);
+  }
+
+  return response.data;
+};
+
+const usersFromDB = [];
+async function loadUsersFromDB() {
+  try {
+    const users = await User.find({});
+    usersFromDB.push(...users);
+  } catch (error) {
+    console.error('Error loading users from DB:', error);
+  }
+}
+loadUsersFromDB();
+
+const SERVER_URL = 'http://localhost:3000';
+
 // Simple file upload endpoint for media
 app.post('/api/upload', upload.single('media'), async (req, res) => {
   try {
+
     if (!req.file) {
       return res.status(400).json({ message: 'No file uploaded' });
     }
@@ -125,14 +153,6 @@ app.post('/api/upload', upload.single('media'), async (req, res) => {
       }
     });
 
-    res.json({
-      success: true,
-      filePath,
-      fileName: req.file.originalname,
-      fileSize: req.file.size,
-      fileType: req.file.mimetype,
-    });
-
     // Asynchronously write details to a log file
     const logData = `File uploaded: ${req.file.originalname} at ${new Date().toLocaleString()}\n`;
     fs.writeFile('upload_log.txt', logData, { flag: 'a' }, (err) => {
@@ -142,8 +162,17 @@ app.post('/api/upload', upload.single('media'), async (req, res) => {
     });
   } catch (error) {
     console.error('File upload error:', error);
-    res.status(500).json({ message: 'Error uploading file' });
+    return res.status(500).json({ message: 'Error uploading file' });
   }
+
+  return res.json({
+    success: true,
+    filePath,
+    fileName: req.file.originalname,
+    fileSize: req.file.size,
+    fileType: req.file.mimetype,
+  });
+
 });
 
 // New API endpoint to create n users
@@ -219,6 +248,7 @@ app.post('/api/save-message', async (req, res) => {
           success: true,
           message: newMessage
         });
+        totalCounter++;
       }
     }
     else {
@@ -289,66 +319,120 @@ app.get('/api/get-users', async (req, res) => {
   }
 });
 
-// New API endpoint to select a random user and send a random message or upload an image
+// New API endpoint to select a random user and send a random file
 let messageCounter = 0;
+
+// Path to the images and uploads folders
+const imagesFolder = './images';
+const uploadsFolder = './uploads';
+
+// Ensure the uploads folder exists
+if (!fs.existsSync(uploadsFolder)) {
+  fs.mkdirSync(uploadsFolder, { recursive: true });
+}
+
+// Cached file list
+let fileList = [];
+
+// Load files from the ./images folder at server start
+const loadFilesFromFolder = (folderPath) => {
+  return new Promise((resolve, reject) => {
+    fs.readdir(folderPath, (err, files) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(files.map(file => path.join(folderPath, file)));
+    });
+  });
+};
+
+// Preload files from the images folder
+loadFilesFromFolder(imagesFolder)
+  .then(files => {
+    fileList = files;
+    console.log('Files loaded successfully.');
+  })
+  .catch(err => {
+    console.error('Error loading files from folder:', err);
+  });
+
+// Function to determine file type
+const getFileType = (fileExtension) => {
+  // const fileTypeHeader = `application/${fileExtension}`; // Simulated MIME type
+  const fileTypeHeader = fileExtension;
+  if (fileTypeHeader.startsWith('image/')) {
+    return 'image';
+  } else if (fileTypeHeader.startsWith('video/')) {
+    return 'video';
+  } else if (fileTypeHeader.startsWith('audio/')) {
+    return 'audio';
+  } else if (fileTypeHeader.startsWith('application/')) {
+    return 'file';
+  } else {
+    return 'other';
+  }
+};
+
+// Endpoint to send a random file
+app.post('/api/send-random-file', async (req, res) => {
+  if (fileList.length === 0) {
+    return res.status(404).json({
+      success: false,
+      message: 'No files available in the images folder',
+    });
+  }
+
+  // Select a random file
+  const randomFile = fileList[Math.floor(Math.random() * fileList.length)];
+  const originalFilePath = randomFile;
+
+  try {
+    // Get file stats
+    const stats = fs.statSync(originalFilePath);
+
+    // Determine the file type
+    const fileType = getFileType(mime.lookup(originalFilePath));
+
+    // Generate a unique file name and move the file to the uploads folder
+    const uniqueFileName = `${crypto.randomUUID()}${path.extname(randomFile)}`;
+    const newFilePath = path.join(uploadsFolder, uniqueFileName);
+
+    fs.copyFileSync(originalFilePath, newFilePath); // Copy the file to the uploads folder
+    // fs.unlinkSync(originalFilePath); // Optionally, delete the original file (comment this line if you don't want to delete it)
+
+    const fileSize = stats.size;
+
+    return res.json({
+      success: true,
+      message: {
+        mediaUrl: newFilePath, // New file path in the uploads folder
+        mediaType: fileType,
+        fileName: uniqueFileName,
+        fileSize: fileSize,
+      },
+      type: 'upload',
+    });
+  } catch (error) {
+    console.error('Error processing the file:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error processing the file',
+    });
+  }
+});
+
+// New API endpoint to select a random user and send a random message
 app.post('/api/send-random-message', async (req, res) => {
   try {
-    const users = await User.find({});
-    if (users.length === 0) {
+    if (usersFromDB.length === 0) {
       return res.status(400).json({ message: 'No users found' });
     }
-
-    const randomUser = users[Math.floor(Math.random() * users.length)];
-
-    if (messageCounter % 100 === 0) {
-      // Send a random file from the images folder
-      const imagesFolder = path.join(__dirname, 'images');
-      const files = fs.readdirSync(imagesFolder);
-      const randomFile = files[Math.floor(Math.random() * files.length)];
-      const filePath = path.join(imagesFolder, randomFile);
-      const fileStats = fs.statSync(filePath);
-
-      const newMessage = new Message({
-        chatRoom: generalRoom._id,
-        sender: randomUser._id,
-        messageType: 'image',
-        mediaUrl: `/uploads/${randomFile}`,
-        fileName: randomFile,
-        fileSize: fileStats.size
-      });
-
-      const savedMessage = await newMessage.save();
-      io.to(generalRoom._id.toString()).emit('mediaMessage', {
-        _id: savedMessage._id,
-        username: randomUser.username,
-        mediaUrl: savedMessage.mediaUrl,
-        mediaType: 'image',
-        fileName: savedMessage.fileName,
-        fileSize: savedMessage.fileSize,
-        timestamp: new Date().toLocaleTimeString()
-      });
-      res.json({ success: true, message: savedMessage });
-    } else {
-      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-
-      const newMessage = new Message({
-        chatRoom: generalRoom._id,
-        sender: randomUser._id,
-        messageType: 'text',
-        text: randomMessage
-      });
-
-      const savedMessage = await newMessage.save();
-      io.to(generalRoom._id.toString()).emit('chatMessage', {
-        _id: savedMessage._id,
-        username: randomUser.username,
-        text: savedMessage.text,
-        timestamp: new Date().toLocaleTimeString()
-      });
-      res.json({ success: true, message: savedMessage });
-    }
+    // const randomUser = usersFromDB[Math.floor(Math.random() * usersFromDB.length)];
+    const randomMessage = messages[Math.floor(Math.random() * messages.length)];
 
     messageCounter++;
+    return res.json({ success: true, message: randomMessage, type: 'text' });
+
   } catch (error) {
     console.error('Error in send-random-message endpoint:', error);
     res.status(500).json({ message: 'Error sending random message' });

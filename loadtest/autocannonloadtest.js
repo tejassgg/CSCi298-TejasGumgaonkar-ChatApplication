@@ -6,6 +6,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const FormData = require('form-data');
+const { report, resourceUsage } = require('node:process');
 
 const SERVER_URL = 'http://localhost:3000';
 
@@ -58,33 +59,6 @@ function getRandomUser(users) {
     return users[Math.floor(Math.random() * users.length)];
 }
 
-// Function to load files from a folder
-const loadFilesFromFolder = (folderPath) => {
-    return new Promise((resolve, reject) => {
-        fs.readdir(folderPath, (err, files) => {
-            if (err) {
-                return reject(err);
-            }
-            resolve(files.map(file => path.join(folderPath, file)));
-            console.log('All Files Loaded from Images Folder');
-        });
-    });
-};
-
-// Function to upload a file
-const uploadFile = async (filePath) => {
-    const formData = new FormData();
-    formData.append('media', fs.createReadStream(filePath));
-
-    const response = await axios.post(`${SERVER_URL}/api/upload`, formData);
-
-    if (response.status !== 200) {
-        throw new Error(`Failed to upload file: ${response.statusText}`);
-    }
-
-    return response.data;
-};
-
 // Function to get CPU utilization
 function getCpuUsage() {
     const cpus = os.cpus();
@@ -109,8 +83,9 @@ function getMemoryUsage() {
 
 let messageCount = 0;
 let fileCount = 0;
+
 // Function to setup autocannon
-function setupAutocannon(users, files, duration = 10) {
+function setupAutocannon(users, duration = 10) {
     console.log('Setting up autocannon...');
 
     let cpuUsages = [];
@@ -120,56 +95,77 @@ function setupAutocannon(users, files, duration = 10) {
         cpuUsages.push(getCpuUsage());
         memoryUsages.push(getMemoryUsage());
     }, 1000);
+
     console.log('Load Testing Started');
+
+    const socket = io(SERVER_URL, {
+        transports: ['websocket'],
+        reconnection: false
+    });
+
     autocannon({
         title: 'Chat Load Test',
-        url: `${SERVER_URL}/api/send-random-message`,
+        url: SERVER_URL,
         connections: users.length,
         duration: duration,
+        requests: [
+            {
+                method: 'POST',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'POST',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'POST',
+                path: '/api/send-random-file',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('mediaMessage', data.message);
+                            fileCount++;
+                        }
+                    }
+                }
+            }
+        ],
         setupClient: (client) => {
             const user = getRandomUser(users);
-            const socket = io(SERVER_URL, {
-                transports: ['websocket'],
-                reconnection: false
-            });
 
             socket.on('connect', async () => {
                 socket.emit('join', user.username);
                 client.on('response', async (status, body, context) => {
-
-                    if ((messageCount + fileCount) % 200 == 0) {
-                        const filePath = files[Math.floor(Math.random() * files.length)];
-                        const fileData = await uploadFile(filePath);
-                        var fileType = "";
-                        if (fileData.fileType.startsWith('image/')) {
-                            fileType = 'image';
-                        }
-                        else if (fileData.fileType.startsWith('video/')) {
-                            fileType = 'video';
-                        }
-                        else if (fileData.fileType.startsWith('audio/')) {
-                            fileType = 'audio';
-                        }
-                        else if (fileData.fileType.startsWith('application/')) {
-                            fileType = 'file';
-                        }
-                        else {
-                            fileType = 'other';
-                        }
-
-                        if (fileData.success) {
-                            socket.emit('mediaMessage', {
-                                mediaUrl: fileData.filePath,
-                                mediaType: fileType,
-                                fileName: path.basename(fileData.filePath),
-                                fileSize: fileData.fileSize
-                            });
-                            fileCount++;
-                        }
-                    } else {
-                        socket.emit('chatMessage', getRandomMessage());
-                        messageCount++;
-                    }
+                    //Do nothing
+                    // console.log(client);
                 });
             });
 
@@ -182,9 +178,11 @@ function setupAutocannon(users, files, duration = 10) {
         if (err) {
             console.error('Autocannon encountered an error:', err);
         } else {
-            const result = getInsigthfulResults(res, cpuUsages, memoryUsages);
-            // console.log('Autocannon results:', res);
+            const datas = report.getReport();
+            const totalRequests = messageCount + fileCount;
+            const result = getInsigthfulResults(res, cpuUsages, memoryUsages, datas, totalRequests);
             CheckandSavetoFile(result);
+
             console.log(`Load Testing Completed with ${users.length} users for ${duration} seconds, sent ${messageCount} messages and ${fileCount} files`);
         }
     });
@@ -198,7 +196,7 @@ function CheckandSavetoFile(result) {
     }
 
     // Save the insights to a JSON file
-    const filename = `autocannon_insights_${getDate()}.json`;
+    const filename = `insights_${getDate()}.json`;
     const filePath = path.join(resultsDir, filename);
 
     fs.writeFileSync(filePath, JSON.stringify(result, null, 2), 'utf-8');
@@ -211,12 +209,13 @@ const getDate = () => {
 }
 
 // Function to extract meaningful insights from autocannon results
-function getInsigthfulResults(res, cpuUsages, memoryUsages) {
+function getInsigthfulResults(res, cpuUsages, memoryUsages, reportData, totalRequests) {
     const insights = {
         testTitle: res.title,
         urlTested: res.url,
         connections: `${res.connections} connections`,
         duration: `${res.duration} seconds`,
+        actualMessagesSent: `${totalRequests} messages`,
         totalRequests: `${res.requests.total} requests`,
         total2xxResponses: `${res['2xx']} responses`,
         numberOfMessagesSent: messageCount,
@@ -254,7 +253,7 @@ function getInsigthfulResults(res, cpuUsages, memoryUsages) {
     };
 
     // Combine insights and metadata
-    return { insights, metadata };
+    return { insights, metadata, reportData };
 }
 
 // Countdown timer function (prints in one line)
@@ -276,11 +275,11 @@ function countdown(seconds, callback) {
 // Main function to run the test
 async function main() {
     try {
-        const numUsers = 75; // Adjust the number of users as needed
-        const duration = 20; // Test duration in seconds
+        const numUsers = 100; // Adjust the number of users as needed
+        const duration = 5; // Test duration in seconds
 
         const users = await getUsers(numUsers);
-        const files = await loadFilesFromFolder('../images');
+        // const files = await loadFilesFromFolder('../images');
 
         const folderPath = "../uploads";
         const filestobeDeleted = fs.readdirSync(folderPath);
@@ -292,8 +291,8 @@ async function main() {
         console.log(`All files in folder "${folderPath}" deleted successfully.`);
 
         if (users && users.length) {
-            countdown(10, () => {
-                setupAutocannon(users, files, duration);
+            countdown(1, () => {
+                setupAutocannon(users, duration);
             });
         }
 
