@@ -410,7 +410,7 @@ app.post('/api/send-random-file', async (req, res) => {
 });
 
 // New API endpoint to select a random user and send a random message
-app.post('/api/send-random-message', async (req, res) => {
+app.get('/api/send-random-message', async (req, res) => {
   try {
     if (usersFromDB.length === 0) {
       return res.status(400).json({ message: 'No users found' });
@@ -485,7 +485,9 @@ io.on('connection', async (socket) => {
     try {
       if (!currentUser || !currentRoom) return;
 
-      currentUser = usersFromDB[Math.floor(Math.random() * usersFromDB.length)];
+      // currentUser = usersFromDB[Math.floor(Math.random() * usersFromDB.length)];
+
+      // console.log('User Name: ', currentUser.username);
 
       // Create new message in database
       const newMessage = new Message({
@@ -536,7 +538,7 @@ io.on('connection', async (socket) => {
     try {
       if (!currentUser || !currentRoom) return;
 
-      currentUser = usersFromDB[Math.floor(Math.random() * usersFromDB.length)];
+      // currentUser = usersFromDB[Math.floor(Math.random() * usersFromDB.length)];
 
       // console.log('User Name: ', currentUser.username);
 

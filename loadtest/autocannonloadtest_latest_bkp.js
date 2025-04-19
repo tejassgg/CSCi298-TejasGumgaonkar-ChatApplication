@@ -98,51 +98,76 @@ function setupAutocannon(users, duration = 10) {
 
     console.log('Load Testing Started');
 
-    let index = 0;
+    const socket = io(SERVER_URL, {
+        transports: ['websocket'],
+        reconnection: false
+    });
 
     const instance = autocannon({
         title: 'Chat Load Test',
         url: SERVER_URL,
         connections: users.length,
         duration: duration,
-        connectionRate: 100,
+        connectionRate:100,
         overallRate: 200,
         pipelining: 1,
-        maxConnectionRequests: users.length,
-        setupClient: (client) => {
-            // const user = getRandomUser(users);
-            const socket = io(SERVER_URL, {
-                transports: ['websocket'],
-                reconnection: false
-            });
-
-            socket.on('connect', async () => {
-                socket.emit('join', users[index].username);
-                index++;
-                client.on('response', async (status, body, context) => {
-
-                    if ((messageCount + fileCount) % 100 === 0) {
-                        const response = await axios.post(`${SERVER_URL}/api/send-random-file`);
-                        if (response.status !== 200) {
-                            throw new Error('Failed to Send File: ');
-                        }
-                        const data = response.data;
-                        if (data.success) {
-                            socket.emit('mediaMessage', data.message);
-                            fileCount++;
-                        }
+        requests: [
+            {
+                method: 'POST',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
                     }
                     else {
-                        const response = await axios.get(`${SERVER_URL}/api/send-random-message`);
-                        if (response.status !== 200) {
-                            throw new Error('Failed to Send Message: ');
-                        }
-                        const data = response.data;
+                        const data = JSON.parse(body);
                         if (data.success) {
                             socket.emit('chatMessage', data.message);
                             messageCount++;
                         }
                     }
+                }
+            },
+            {
+                method: 'POST',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'POST',
+                path: '/api/send-random-file',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('mediaMessage', data.message);
+                            fileCount++;
+                        }
+                    }
+                }
+            }
+        ],
+        setupClient: (client) => {
+            const user = getRandomUser(users);
+
+            socket.on('connect', async () => {
+                socket.emit('join', user.username);
+                client.on('response', async (status, body, context) => {
+                    //Do nothing
                 });
             });
 
@@ -167,7 +192,7 @@ function setupAutocannon(users, duration = 10) {
     autocannon.track(instance, { renderProgressBar: true, renderLatencyTable: true, renderResultsTable: true });
     instance.on('done', () => {
         console.log('Test completed');
-        // socket.disconnect();
+        socket.disconnect();
     });
 }
 
@@ -258,7 +283,7 @@ function countdown(seconds, callback) {
 // Main function to run the test
 async function main() {
     try {
-        const numUsers = 2000; // Adjust the number of users as needed
+        const numUsers = 1000; // Adjust the number of users as needed
         const duration = 20; // Test duration in seconds
 
         const users = await getUsers(numUsers);
