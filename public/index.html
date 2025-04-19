@@ -142,7 +142,7 @@
 
         // Socket event handlers
         socket.on('message', (data) => {
-            console.log(data.text);
+            // console.log('Text Message Received: ', data.username);
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
             messageDiv.innerHTML = `
@@ -157,7 +157,7 @@
         });
 
         socket.on('mediaMessage', (data) => {
-            console.log('Media Message Received');
+            // console.log('Media Message Received: ', data.username);
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${data.username === username ? 'sent' : 'received'}`;
             let content = '';
@@ -172,6 +172,7 @@
             </div>
         `;
             } else if (data.mediaType === 'video') {
+                console.log('Video URL: ', data.mediaUrl);
                 content = `
             <div class="message-content">
                 <strong>${data.username}</strong><br>

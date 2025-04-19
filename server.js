@@ -105,18 +105,6 @@ const createDefaultRoom = async () => {
 
 createDefaultRoom();
 
-// Function to upload a file
-const uploadFile = async (filePath) => {
-  const formData = new FormData();
-  formData.append('media', fs.createReadStream(filePath));
-  const response = await axios.post(`${SERVER_URL}/api/upload`, formData);
-  if (response.status !== 200) {
-    throw new Error(`Failed to upload file: ${response.statusText}`);
-  }
-
-  return response.data;
-};
-
 const usersFromDB = [];
 async function loadUsersFromDB() {
   try {
@@ -394,7 +382,7 @@ app.post('/api/send-random-file', async (req, res) => {
     const fileType = getFileType(mime.lookup(originalFilePath));
 
     // Generate a unique file name and move the file to the uploads folder
-    const uniqueFileName = `${crypto.randomUUID()}${path.extname(randomFile)}`;
+    const uniqueFileName = `media_${Date.now()}${path.extname(randomFile)}`;
     const newFilePath = path.join(uploadsFolder, uniqueFileName);
 
     fs.copyFileSync(originalFilePath, newFilePath); // Copy the file to the uploads folder
@@ -497,6 +485,8 @@ io.on('connection', async (socket) => {
     try {
       if (!currentUser || !currentRoom) return;
 
+      currentUser = usersFromDB[Math.floor(Math.random() * usersFromDB.length)];
+
       // Create new message in database
       const newMessage = new Message({
         chatRoom: currentRoom,
@@ -545,6 +535,10 @@ io.on('connection', async (socket) => {
   socket.on('mediaMessage', async (data) => {
     try {
       if (!currentUser || !currentRoom) return;
+
+      currentUser = usersFromDB[Math.floor(Math.random() * usersFromDB.length)];
+
+      // console.log('User Name: ', currentUser.username);
 
       const { mediaUrl, mediaType, fileName, fileSize } = data;
 

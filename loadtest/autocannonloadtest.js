@@ -103,11 +103,14 @@ function setupAutocannon(users, duration = 10) {
         reconnection: false
     });
 
-    autocannon({
+    const instance = autocannon({
         title: 'Chat Load Test',
         url: SERVER_URL,
         connections: users.length,
         duration: duration,
+        connectionRate:100,
+        overallRate: 200,
+        pipelining: 1,
         requests: [
             {
                 method: 'POST',
@@ -165,7 +168,6 @@ function setupAutocannon(users, duration = 10) {
                 socket.emit('join', user.username);
                 client.on('response', async (status, body, context) => {
                     //Do nothing
-                    // console.log(client);
                 });
             });
 
@@ -185,6 +187,12 @@ function setupAutocannon(users, duration = 10) {
 
             console.log(`Load Testing Completed with ${users.length} users for ${duration} seconds, sent ${messageCount} messages and ${fileCount} files`);
         }
+    });
+
+    autocannon.track(instance, { renderProgressBar: true, renderLatencyTable: true, renderResultsTable: true });
+    instance.on('done', () => {
+        console.log('Test completed');
+        socket.disconnect();
     });
 }
 
@@ -275,8 +283,8 @@ function countdown(seconds, callback) {
 // Main function to run the test
 async function main() {
     try {
-        const numUsers = 100; // Adjust the number of users as needed
-        const duration = 5; // Test duration in seconds
+        const numUsers = 1000; // Adjust the number of users as needed
+        const duration = 20; // Test duration in seconds
 
         const users = await getUsers(numUsers);
         // const files = await loadFilesFromFolder('../images');
