@@ -7,8 +7,9 @@ const path = require('path');
 const fs = require('fs');
 const FormData = require('form-data');
 const { report, resourceUsage } = require('node:process');
-
 const SERVER_URL = 'http://localhost:3000';
+let messageCount = 0;
+let fileCount = 0;
 
 const messages = [
     'Hello from user!',
@@ -32,12 +33,6 @@ const messages = [
     Cotton candy macaroon cheesecake chocolate cake bear claw wafer donut. Sesame snaps bear claw gingerbread chupa chups dragée liquorice brownie lemon drops. Sweet marshmallow powder muffin chupa chups jelly-o jelly pie jelly. Biscuit tootsie roll wafer caramels cheesecake. Gingerbread jelly-o gummies liquorice topping bear claw. Oat cake jelly-o candy canes powder halvah marshmallow. Lemon drops toffee candy cotton candy gummi bears. Gummi bears bonbon cookie halvah tiramisu chocolate bar biscuit chupa chups.
     Chocolate bar shortbread fruitcake chocolate jujubes cake pastry macaroon gummies. Gummies cake fruitcake croissant croissant marshmallow lemon drops sweet roll liquorice. Shortbread gingerbread cupcake gummies jujubes candy jelly dragée. Marshmallow donut pie cotton candy powder tootsie roll bear claw. Brownie cake cookie pudding chupa chups. Sesame snaps gummies cookie ice cream tiramisu gingerbread powder biscuit jelly.`
 ];
-
-// Function to get a random message
-function getRandomMessage() {
-    return messages[Math.floor(Math.random() * messages.length)];
-}
-
 // Function to get list of  users
 async function getUsers(numUsers) {
     try {
@@ -53,12 +48,6 @@ async function getUsers(numUsers) {
         console.error('Error in getUsers:', error);
     }
 }
-
-// Function to get a random user
-function getRandomUser(users) {
-    return users[Math.floor(Math.random() * users.length)];
-}
-
 // Function to get CPU utilization
 function getCpuUsage() {
     const cpus = os.cpus();
@@ -73,17 +62,15 @@ function getCpuUsage() {
     const total = totalTick / cpus.length;
     return (1 - idle / total) * 100;
 }
-
 // Function to get memory usage
 function getMemoryUsage() {
     const totalMem = os.totalmem();
     const freeMem = os.freemem();
     return ((totalMem - freeMem) / totalMem) * 100;
 }
-
-let messageCount = 0;
-let fileCount = 0;
-
+const getDate = () => {
+    return new Date().toLocaleString("en-US").toString("MM-dd-YYYY").replaceAll(", ", "_").replaceAll("/", "-").replaceAll(" ", "").replaceAll(":", "-")
+}
 // Function to setup autocannon
 function setupAutocannon(users, duration = 10) {
     console.log('Setting up autocannon...');
@@ -107,8 +94,7 @@ function setupAutocannon(users, duration = 10) {
         duration: duration,
         connectionRate: 100,
         overallRate: 200,
-        pipelining: 1,
-        maxConnectionRequests: users.length,
+        // maxOverallRequests: 20000,
         setupClient: (client) => {
             // const user = getRandomUser(users);
             const socket = io(SERVER_URL, {
@@ -121,7 +107,7 @@ function setupAutocannon(users, duration = 10) {
                 index++;
                 client.on('response', async (status, body, context) => {
 
-                    if ((messageCount + fileCount) % 100 === 0) {
+                    if ((messageCount + fileCount) % 100 == 0) {
                         const response = await axios.post(`${SERVER_URL}/api/send-random-file`);
                         if (response.status !== 200) {
                             throw new Error('Failed to Send File: ');
@@ -164,13 +150,11 @@ function setupAutocannon(users, duration = 10) {
         }
     });
 
-    autocannon.track(instance, { renderProgressBar: true, renderLatencyTable: true, renderResultsTable: true });
+    autocannon.track(instance, { renderProgressBar: true, renderResultsTable: true });
     instance.on('done', () => {
         console.log('Test completed');
-        // socket.disconnect();
     });
 }
-
 function CheckandSavetoFile(result) {
     // Ensure the perf_results directory exists
     const resultsDir = path.join(__dirname, '../perf_results');
@@ -186,11 +170,6 @@ function CheckandSavetoFile(result) {
 
     console.log(`Insights saved to ${filePath}`);
 }
-
-const getDate = () => {
-    return new Date().toLocaleString("en-US").toString("MM-dd-YYYY").replaceAll(", ", "_").replaceAll("/", "-").replaceAll(" ", "").replaceAll(":", "-")
-}
-
 // Function to extract meaningful insights from autocannon results
 function getInsigthfulResults(res, cpuUsages, memoryUsages, reportData, totalRequests) {
     const insights = {
@@ -238,7 +217,6 @@ function getInsigthfulResults(res, cpuUsages, memoryUsages, reportData, totalReq
     // Combine insights and metadata
     return { insights, metadata, reportData };
 }
-
 // Countdown timer function (prints in one line)
 function countdown(seconds, callback) {
     process.stdout.write(`Starting Test in: `);
@@ -254,24 +232,27 @@ function countdown(seconds, callback) {
         }
     }, 1000);
 }
-
 // Main function to run the test
 async function main() {
     try {
         const numUsers = 2000; // Adjust the number of users as needed
         const duration = 20; // Test duration in seconds
 
+        console.log(`User fetching started for ${numUsers} users.`);
         const users = await getUsers(numUsers);
-        // const files = await loadFilesFromFolder('../images');
+        console.log(`User fetching completed for ${numUsers} users.`);
 
         const folderPath = "../uploads";
+
+        console.log(`File deletion started from "${folderPath}".`);
+
         const filestobeDeleted = fs.readdirSync(folderPath);
         filestobeDeleted.forEach(file => {
             const filePath = path.join(folderPath, file);
             fs.unlinkSync(filePath);
         });
 
-        console.log(`All files in folder "${folderPath}" deleted successfully.`);
+        console.log(`File deletion completed from  "${folderPath}" successfully.`);
 
         if (users && users.length) {
             countdown(1, () => {
@@ -283,7 +264,7 @@ async function main() {
         console.error('Error in main:', error);
     }
 }
-
+// Function to format date and time
 function formatDate(timestamp) {
     const date = new Date(timestamp);
     const day = String(date.getDate()).padStart(2, '0');
@@ -299,5 +280,5 @@ function formatDate(timestamp) {
 
     return `${day}/${month}/${year} ${formattedTime}`;
 }
-
+// Execute the main function
 main();

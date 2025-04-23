@@ -300,7 +300,7 @@ app.get('/api/get-users', async (req, res) => {
       const usersList = await User.find().limit(parseInt(numUsers));
       res.json({ success: true, users: usersList, generalRoom });
     }
-
+ 
   } catch (error) {
     console.error('Error in get-users endpoint:', error);
     res.status(500).json({ message: 'Error fetching users' });
