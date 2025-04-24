@@ -112,10 +112,15 @@ function setupAutocannon(users, duration = 10) {
                         if (response.status !== 200) {
                             throw new Error('Failed to Send File: ');
                         }
-                        const data = response.data;
-                        if (data.success) {
-                            socket.emit('mediaMessage', data.message);
-                            fileCount++;
+                        else {
+                            const data = response.data;
+                            if (data.success) {
+                                socket.emit('mediaMessage', data.message);
+                                fileCount++;
+                            }
+                            else {
+                                console.error('Failed to send file.');
+                            }
                         }
                     }
                     else {
@@ -123,10 +128,15 @@ function setupAutocannon(users, duration = 10) {
                         if (response.status !== 200) {
                             throw new Error('Failed to Send Message: ');
                         }
-                        const data = response.data;
-                        if (data.success) {
-                            socket.emit('chatMessage', data.message);
-                            messageCount++;
+                        else {
+                            const data = response.data;
+                            if (data.success) {
+                                socket.emit('chatMessage', data.message);
+                                messageCount++;
+                            }
+                            else {
+                                console.error('Failed to send message.');
+                            }
                         }
                     }
                 });
