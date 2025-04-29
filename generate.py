@@ -49,18 +49,20 @@ def plot_metrics(data, testCount, ticks=4):
     print(f"Min : {min(min_latency)} ms")
     
     print("\nRequests Handled: ")
-    print(f"Avg : {round(np.mean(avg_requests),2)} Req/Sec")
-    print(f"Max : {max(max_requests)} Req/Sec")
-    print(f"Min : {min(min_requests)} Req/Sec")
+    print(f"Avg : {round(np.mean(avg_requests),2)} Req/sec")
+    print(f"Max : {max(max_requests)} Req/sec")
+    print(f"Min : {min(min_requests)} Req/sec")
 
     print("\nThroughput: ")
-    print(f"Avg : {round(np.mean(avg_throughput),2)} MB/sec")
-    print(f"Max : {max(max_throughput)} MB/sec")
-    print(f"Min : {min(min_throughput)} MB/sec")
+    print(f"Avg : {round(np.mean(avg_throughput),2)} MBps")
+    print(f"Max : {max(max_throughput)} MBps")
+    print(f"Min : {min(min_throughput)} MBps")
 
-    print("\nError Rate: ")
-    print(f"Avg : {round(np.mean(error_rates),2)} %")
-    print(f"Avg Non-2xx : {round(np.mean(non2xx_rates),2)} %")
+    av_err_rate = round(np.mean(error_rates),2)
+    if( av_err_rate > 0.0):
+        print("\nError Rate: ")
+        print(f"Avg : {av_err_rate} %")
+        print(f"Avg Non-2xx : {round(np.mean(non2xx_rates),2)} %")
 
     print("\nAvg Utilization: ")
     print(f"CPU : {round(np.mean(avg_cpu_usage),2)} %")
@@ -102,7 +104,7 @@ def plot_metrics(data, testCount, ticks=4):
     axs[1, 0].set_ylim(0, max_throughput[0]*1.5)
     axs[1, 0].set_title('Throughput')
     axs[1, 0].set_xlabel('Test Run(s)')
-    axs[1, 0].set_ylabel('Throughput (MB/sec)')
+    axs[1, 0].set_ylabel('Throughput (MBps)')
     axs[1, 0].legend()
     axs[1, 0].grid(True)
     axs[1, 0].xaxis.set_ticks(np.arange(0, testCount+1, ticks))
@@ -135,7 +137,7 @@ def plot_metrics(data, testCount, ticks=4):
     axs1[0,1].boxplot(max_requests, vert=False)
     axs1[0,1].set_xlabel('Requests per Second')
     axs1[0,1].set_title('Boxplot of Max Requests per Second')
-    axs1[0,1].xaxis.set_ticks(np.arange(0, testCount+1, ticks))
+    # axs1[0,1].xaxis.set_ticks(np.arange(0, testCount+1, ticks))
     
     # Plot Number of Messages Sent Over Test Runs
     x = np.array(list(test_runs))
@@ -167,18 +169,27 @@ def plot_metrics(data, testCount, ticks=4):
     axs1[1,1].grid(True)
     axs1[1,1].xaxis.set_ticks(np.arange(0, testCount+1, ticks))
 
-    plt.tight_layout(pad=padding)
-    plt.show()
+    # plt.tight_layout(pad=padding)
+    # plt.show()
 
 
 
 def main():
     results_dir = './perf_results_control'
-    ticks = 5
+    results_dir1 = './perf_results_exp'
+    # results_dir = './perf_results'
+    ticks = 2
     perf_data, testCount = load_perf_data(results_dir)
-    print("----------------------Test Insights----------------------")
+    perf_data1, testCount1 = load_perf_data(results_dir1)
+    print(f"\nNumber of Tests Performed: {testCount}")
+
+    print("\n----------------------Test Insights - Ctrl Grp----------------------")
     print(f"\nNumber of Tests Performed: {testCount}")
     plot_metrics(perf_data, testCount,ticks)
+
+    print("\n----------------------Test Insights - Exp Grp----------------------")
+    print(f"\nNumber of Tests Performed: {testCount1}")
+    plot_metrics(perf_data1, testCount1,ticks)
 
 if __name__ == "__main__":
     main() 

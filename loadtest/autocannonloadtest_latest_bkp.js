@@ -103,17 +103,18 @@ function setupAutocannon(users, duration = 10) {
         reconnection: false
     });
 
+    let i = 0;
+
     const instance = autocannon({
         title: 'Chat Load Test',
         url: SERVER_URL,
         connections: users.length,
         duration: duration,
-        connectionRate:100,
-        overallRate: 200,
-        pipelining: 1,
+        connectionRate: 100,
+        overallRate: 180,
         requests: [
             {
-                method: 'POST',
+                method: 'GET',
                 path: '/api/send-random-message',
                 onResponse: (status, body, context) => {
                     if (status !== 200) {
@@ -129,7 +130,87 @@ function setupAutocannon(users, duration = 10) {
                 }
             },
             {
-                method: 'POST',
+                method: 'GET',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'GET',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'GET',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'GET',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'GET',
+                path: '/api/send-random-message',
+                onResponse: (status, body, context) => {
+                    if (status !== 200) {
+                        console.error(`Error: ${status} - ${body}`);
+                    }
+                    else {
+                        const data = JSON.parse(body);
+                        if (data.success) {
+                            socket.emit('chatMessage', data.message);
+                            messageCount++;
+                        }
+                    }
+                }
+            },
+            {
+                method: 'GET',
                 path: '/api/send-random-message',
                 onResponse: (status, body, context) => {
                     if (status !== 200) {
@@ -163,12 +244,14 @@ function setupAutocannon(users, duration = 10) {
         ],
         setupClient: (client) => {
             const user = getRandomUser(users);
+            // const user = users[i];
 
             socket.on('connect', async () => {
                 socket.emit('join', user.username);
-                client.on('response', async (status, body, context) => {
-                    //Do nothing
-                });
+                // client.on('response', async (status, body, context) => {
+                //     //Do nothing
+                // });
+                i++;
             });
 
             socket.on('connect_error', (err) => {
@@ -189,10 +272,9 @@ function setupAutocannon(users, duration = 10) {
         }
     });
 
-    autocannon.track(instance, { renderProgressBar: true, renderLatencyTable: true, renderResultsTable: true });
+    autocannon.track(instance, { renderProgressBar: true});
     instance.on('done', () => {
         console.log('Test completed');
-        socket.disconnect();
     });
 }
 
@@ -234,8 +316,8 @@ function getInsigthfulResults(res, cpuUsages, memoryUsages, reportData, totalReq
         maxLatency: `${res.latency.max} ms`,
         averageRequestsPerSecond: `${res.requests.average} requests/second`,
         maxRequestsPerSecond: `${res.requests.max} requests/second`,
-        averageThroughput: `${(res.throughput.average / (1024 * 1024)).toFixed(2)} MB/sec`,
-        maxThroughput: `${(res.throughput.max / (1024 * 1024)).toFixed(2)} MB/sec`,
+        averageThroughput: `${(res.throughput.average / (1024 * 1024)).toFixed(2)} MBps`,
+        maxThroughput: `${(res.throughput.max / (1024 * 1024)).toFixed(2)} MBps`,
         averageCpuUsage: `${(cpuUsages.reduce((a, b) => a + b, 0) / cpuUsages.length).toFixed(2)}%`,
         maxCpuUsage: `${Math.max(...cpuUsages).toFixed(2)}%`,
         averageMemoryUsage: `${(memoryUsages.reduce((a, b) => a + b, 0) / memoryUsages.length).toFixed(2)}%`,
@@ -283,22 +365,22 @@ function countdown(seconds, callback) {
 // Main function to run the test
 async function main() {
     try {
-        const numUsers = 1000; // Adjust the number of users as needed
+        const numUsers = 2000; // Adjust the number of users as needed
         const duration = 20; // Test duration in seconds
 
         const users = await getUsers(numUsers);
         // const files = await loadFilesFromFolder('../images');
 
-        const folderPath = "../uploads";
-        const filestobeDeleted = fs.readdirSync(folderPath);
-        filestobeDeleted.forEach(file => {
-            const filePath = path.join(folderPath, file);
-            fs.unlinkSync(filePath);
-        });
-
-        console.log(`All files in folder "${folderPath}" deleted successfully.`);
-
         if (users && users.length) {
+
+            const folderPath = "../uploads";
+            const filestobeDeleted = fs.readdirSync(folderPath);
+            filestobeDeleted.forEach(file => {
+                const filePath = path.join(folderPath, file);
+                fs.unlinkSync(filePath);
+            });
+
+            console.log(`All files in folder "${folderPath}" deleted successfully.`);
             countdown(1, () => {
                 setupAutocannon(users, duration);
             });
